@@ -1,0 +1,13 @@
+{
+  "name": "cube-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP Server for Cube.js Analytics",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

@@ -1,0 +1,70 @@
+cubes:
+  - name: Orders
+    sql: SELECT * FROM orders
+    
+    measures:
+      - name: count
+        type: count
+        title: Total Orders
+        
+      - name: totalAmount
+        type: sum
+        sql: amount
+        title: Total Revenue
+        
+      - name: avgAmount
+        type: avg
+        sql: amount
+        title: Average Order Value
+        
+      - name: totalQuantity
+        type: sum
+        sql: quantity
+        title: Total Quantity
+
+    dimensions:
+      - name: orderId
+        sql: order_id
+        type: string
+        primary_key: true
+        title: Order ID
+        
+      - name: tenantId
+        sql: tenant_id
+        type: string
+        title: Tenant
+        
+      - name: customerId
+        sql: customer_id
+        type: string
+        title: Customer
+        
+      - name: productCategory
+        sql: product_category
+        type: string
+        title: Category
+        
+      - name: status
+        sql: status
+        type: string
+        title: Status
+        
+      - name: region
+        sql: region
+        type: string
+        title: Region
+        
+      - name: createdAt
+        sql: time
+        type: time
+        title: Created At
+
+    segments:
+      - name: completed
+        sql: "{CUBE}.status = 'completed'"
+        
+      - name: pending
+        sql: "{CUBE}.status = 'pending'"
+        
+      - name: highValue
+        sql: "{CUBE}.amount > 200"
