@@ -2,19 +2,23 @@
 // Cube.js Schema: Orders
 // =============================================
 // Capa semántica con seguridad multitenant
+// Compatible con ClickHouse y TimescaleDB
 // =============================================
 
 cube('Orders', {
-  sql: `SELECT * FROM orders_olap`,
+  // Tabla base - funciona en ClickHouse y PostgreSQL/TimescaleDB
+  sql: `SELECT * FROM orders`,
   
   // ==========================================
   // SEGURIDAD MULTITENANT
   // ==========================================
-  // Inyecta filtro obligatorio por tenant_id
-  // Imposible que un tenant vea datos de otro
-  // ==========================================
   queryRewrite: (query, { securityContext }) => {
-    // Requerir autenticación
+    // En modo desarrollo, permitir sin auth
+    if (process.env.CUBEJS_DEV_MODE === 'true' && !securityContext?.tenantId) {
+      return query;
+    }
+    
+    // En producción, requerir autenticación
     if (!securityContext || !securityContext.tenantId) {
       throw new Error('Authentication required: tenantId missing');
     }
@@ -30,7 +34,7 @@ cube('Orders', {
   },
   
   // ==========================================
-  // MEDIDAS (Métricas que se pueden consultar)
+  // MEDIDAS
   // ==========================================
   measures: {
     count: {
@@ -50,27 +54,22 @@ cube('Orders', {
       title: 'Average Order Value'
     },
     
-    maxAmount: {
-      type: 'max',
-      sql: 'amount',
-      title: 'Largest Order'
-    },
-    
-    minAmount: {
-      type: 'min', 
-      sql: 'amount',
-      title: 'Smallest Order'
+    totalQuantity: {
+      type: 'sum',
+      sql: 'quantity',
+      title: 'Total Quantity'
     }
   },
   
   // ==========================================
-  // DIMENSIONES (Campos para agrupar/filtrar)
+  // DIMENSIONES
   // ==========================================
   dimensions: {
-    id: {
-      sql: 'id',
+    orderId: {
+      sql: 'order_id',
       type: 'string',
-      primaryKey: true
+      primaryKey: true,
+      title: 'Order ID'
     },
     
     tenantId: {
@@ -79,60 +78,51 @@ cube('Orders', {
       title: 'Tenant'
     },
     
-    product: {
-      sql: 'product',
+    customerId: {
+      sql: 'customer_id',
       type: 'string',
-      title: 'Product'
+      title: 'Customer'
     },
     
-    timestamp: {
-      sql: 'timestamp',
+    productCategory: {
+      sql: 'product_category',
+      type: 'string',
+      title: 'Category'
+    },
+    
+    status: {
+      sql: 'status',
+      type: 'string',
+      title: 'Status'
+    },
+    
+    region: {
+      sql: 'region',
+      type: 'string',
+      title: 'Region'
+    },
+    
+    createdAt: {
+      sql: 'time',
       type: 'time',
-      title: 'Order Time'
-    },
-    
-    date: {
-      sql: 'date',
-      type: 'time',
-      title: 'Order Date'
-    },
-    
-    hour: {
-      sql: 'hour',
-      type: 'number',
-      title: 'Hour of Day'
+      title: 'Created At'
     }
   },
   
   // ==========================================
-  // SEGMENTOS (Filtros predefinidos)
+  // SEGMENTOS
   // ==========================================
   segments: {
+    completed: {
+      sql: `${CUBE}.status = 'completed'`
+    },
+    
+    pending: {
+      sql: `${CUBE}.status = 'pending'`
+    },
+    
     highValue: {
-      sql: `${CUBE}.amount > 500`
-    },
-    
-    today: {
-      sql: `${CUBE}.date = today()`
-    },
-    
-    thisWeek: {
-      sql: `${CUBE}.date >= toStartOfWeek(today())`
-    }
-  },
-  
-  // ==========================================
-  // PRE-AGREGACIONES (Caché para performance)
-  // ==========================================
-  preAggregations: {
-    hourly: {
-      measures: [count, totalAmount, avgAmount],
-      dimensions: [product],
-      timeDimension: timestamp,
-      granularity: 'hour',
-      refreshKey: {
-        every: '1 minute'
-      }
+      sql: `${CUBE}.amount > 200`
     }
   }
 });

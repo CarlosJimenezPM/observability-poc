@@ -1,0 +1,34 @@
+{
+  "name": "Observability PoC",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "esbenp.prettier-vscode",
+        "humao.rest-client"
+      ]
+    }
+  },
+
+  "forwardPorts": [4000, 8123, 9092, 5432, 9644],
+  "portsAttributes": {
+    "4000": { "label": "Cube.js Playground", "onAutoForward": "openBrowser" },
+    "8123": { "label": "ClickHouse HTTP" },
+    "9092": { "label": "Kafka/Redpanda" },
+    "5432": { "label": "PostgreSQL" },
+    "9644": { "label": "Redpanda Admin" }
+  },
+
+  "postCreateCommand": "docker compose up -d && echo '⏳ Waiting for services...' && sleep 10 && docker compose ps",
+  "postStartCommand": "docker compose up -d",
+  
+  "remoteUser": "vscode"
+}

@@ -1,46 +1,98 @@
-# 🔭 Real-Time Multitenant Observability PoC
+# 🔭 Observability PoC
 
-Arquitectura de observabilidad en tiempo real para SaaS multitenant con integración de IA.
+Arquitectura de referencia para plataformas de observabilidad multi-tenant con separación OLTP/OLAP.
 
-## 🎯 Problema → Solución
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/YOUR_USERNAME/observability-poc?quickstart=1)
 
-| Problema | Solución |
-|----------|----------|
-| Dual-write (inconsistencia) | CDC → Event streaming |
-| Dashboards lentos | OLAP separada (ClickHouse/ADX) |
-| Datos filtrados entre tenants | Semantic Layer + tenant_id forzado |
-| IA con alucinaciones | MCP sobre Cube.js |
+## 🚀 Quick Start
+
+### Opción 1: GitHub Codespaces (Recomendado)
+
+1. Click en el botón "Open in GitHub Codespaces" arriba
+2. Espera ~2 minutos a que el entorno se configure
+3. Accede a Cube.js Playground en el puerto 4000
+
+### Opción 2: Local (x86_64)
+
+```bash
+git clone https://github.com/YOUR_USERNAME/observability-poc.git
+cd observability-poc
+docker compose up -d
+```
+
+### Opción 3: Local (ARM64 - Raspberry Pi / Apple Silicon)
+
+```bash
+docker compose -f docker-compose.arm.yml up -d
+```
+
+## 📦 Servicios
+
+| Servicio | Puerto | Descripción |
+|----------|--------|-------------|
+| **Cube.js** | 4000 | Capa semántica + Playground |
+| **ClickHouse** | 8123 | Base de datos OLAP (x86_64) |
+| **TimescaleDB** | 5433 | Alternativa OLAP para ARM |
+| **PostgreSQL** | 5432 | Base de datos OLTP |
+| **Redpanda** | 9092 | Message broker (Kafka-compatible) |
 
 ## 🏗️ Arquitectura
 
 ```
-Frontend → Backend → PostgreSQL
-                         │
-                    CDC (Debezium)
-                         │
-                         ▼
-                    Event Hubs / Redpanda
-                         │
-                         ▼
-                    ClickHouse / ADX
-                         │
-                         ▼
-              Cube.js (+ tenant_id + MCP)
-                         │
-                         ▼
-              Dashboard / Chatbot IA
+┌─────────────────────────────────────────────────────────────────┐
+│                         CLIENTES                                │
+│              (Dashboards, APIs, Agentes IA)                     │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    CAPA SEMÁNTICA                               │
+│                      (Cube.js)                                  │
+│  • Modelado dimensional         • Cache inteligente            │
+│  • Control de acceso            • API unificada                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+┌─────────────────────────┐     ┌─────────────────────────┐
+│        OLTP             │     │         OLAP            │
+│     (PostgreSQL)        │     │ (ClickHouse/TimescaleDB)│
+│                         │     │                         │
+│  • Datos operacionales  │────▶│  • Datos históricos     │
+│  • Transacciones        │     │  • Agregaciones         │
+│  • Baja latencia        │     │  • Alto volumen         │
+└─────────────────────────┘     └─────────────────────────┘
+              │                               │
+              └───────────────┬───────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    MESSAGE BROKER                               │
+│                     (Redpanda)                                  │
+│           CDC / Event Streaming / Ingesta                       │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## 🚀 Quick Start
+## 🧪 Demo
+
+### Probar Cube.js Playground
+
+1. Abre http://localhost:4000
+2. Explora el schema `Orders`
+3. Construye queries arrastrando dimensiones y medidas
+
+### Query ClickHouse directo
 
 ```bash
-# 1. Levantar infraestructura
-docker-compose up -d
+# Versión del servidor
+curl "http://localhost:8123/" -d "SELECT version()"
 
-# 2. Iniciar simulador (genera pedidos cada 2s)
-cd simulator && npm install && npm start
+# Contar orders por tenant
+curl "http://localhost:8123/" -d "SELECT tenant_id, count() FROM orders GROUP BY tenant_id"
+```
 
-# 3. Demo de seguridad multitenant
+### Validar multitenancy
+
+```bash
 ./demo/test_multitenancy.sh
 ```
 
@@ -48,50 +100,44 @@ cd simulator && npm install && npm start
 
 ```
 observability-poc/
-├── docker-compose.yml        # PostgreSQL + Redpanda + ClickHouse + Cube
-├── simulator/                # Generador de datos
-├── clickhouse/init/          # Tablas + Kafka Engine
-├── cube/schema/              # Semantic Layer + seguridad
-├── demo/                     # Scripts de demo
-└── docs/                     # 10 documentos de arquitectura
+├── .devcontainer/          # Config GitHub Codespaces
+├── clickhouse/
+│   └── init/               # Scripts inicialización ClickHouse
+├── timescaledb/
+│   └── init/               # Scripts inicialización TimescaleDB (ARM)
+├── cube/
+│   └── schema/             # Modelos Cube.js
+├── simulator/              # Generador de datos de prueba
+├── demo/                   # Scripts de validación
+├── docs/                   # Documentación técnica
+├── docker-compose.yml      # Stack principal (x86_64)
+└── docker-compose.arm.yml  # Stack alternativo (ARM64)
 ```
 
 ## 📚 Documentación
 
-| # | Doc | Tema |
-|---|-----|------|
-| 00 | [resumen-ejecutivo](docs/00-resumen-ejecutivo.md) | TL;DR + diagrama |
-| 01 | [fundamentos-arquitectura](docs/01-fundamentos-arquitectura.md) | EDA, Ingesta, OLAP, Push |
-| 02 | [desafios-criticos](docs/02-desafios-criticos.md) | Backpressure, consistencia |
-| 03 | [patron-oltp-olap](docs/03-patron-oltp-olap.md) | Dos bases de datos |
-| 04 | [arquitectura-multitenant](docs/04-arquitectura-multitenant.md) | Aislamiento lógico |
-| 05 | [seguridad-dashboards](docs/05-seguridad-dashboards.md) | Semantic Layer, Cube.js |
-| 06 | [patrones-escritura](docs/06-patrones-escritura.md) | CDC vs Dual-write |
-| 07 | [implementacion-azure](docs/07-implementacion-azure.md) | Mapeo a servicios Azure |
-| 08 | [integracion-ia-mcp](docs/08-integracion-ia-mcp.md) | IA + MCP + Cube.js |
-| 09 | [olap-vs-vectorial](docs/09-olap-vs-vectorial.md) | Columnar vs Embeddings |
-| 10 | [plan-implementacion-poc](docs/10-plan-implementacion-poc.md) | Código de la PoC |
+- [00 - Resumen Ejecutivo](docs/00-resumen-ejecutivo.md)
+- [01 - Arquitectura General](docs/01-arquitectura-general.md)
+- [02 - Almacenamiento TSDB](docs/02-almacenamiento-tsdb.md)
+- [03 - Capa de Entrega](docs/03-capa-entrega.md)
+- [Más docs...](docs/)
 
-## 🔒 Seguridad Multitenant
+## 🔐 Seguridad Multi-tenant
 
-```javascript
-// cube/schema/Orders.js
-queryRewrite: (query, { securityContext }) => {
-  query.filters.push({
-    member: 'Orders.tenantId',
-    operator: 'equals',
-    values: [securityContext.tenantId]  // FORZADO
-  });
-  return query;
-}
-```
+El aislamiento de datos se implementa en múltiples capas:
 
-## 🛠️ Stack
+1. **Cube.js**: `queryRewrite` inyecta filtro `tenant_id` automáticamente
+2. **ClickHouse**: Row-level policies (opcional)
+3. **Redpanda**: Topics por tenant o headers de partición
 
-| Componente | Local | Azure |
-|------------|-------|-------|
-| OLTP | PostgreSQL | PostgreSQL Flexible |
-| Streaming | Redpanda | Event Hubs |
-| OLAP | ClickHouse | Azure Data Explorer |
-| Semantic | Cube.js | Cube.js + Redis |
-| Push | Socket.io | Web PubSub |
+## 🛠️ Tecnologías
+
+- **Cube.js**: Capa semántica y APIs
+- **ClickHouse**: OLAP columnar de alto rendimiento
+- **TimescaleDB**: Alternativa OLAP basada en PostgreSQL
+- **PostgreSQL**: OLTP tradicional
+- **Redpanda**: Streaming Kafka-compatible
+
+## 📄 Licencia
+
+MIT

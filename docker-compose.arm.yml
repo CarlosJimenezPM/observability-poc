@@ -1,3 +1,7 @@
+# Versión ARM64 - Usa TimescaleDB en lugar de ClickHouse
+# Para Raspberry Pi, Apple Silicon, etc.
+# Uso: docker compose -f docker-compose.arm.yml up -d
+
 services:
   # Base de datos operacional (OLTP)
   postgres:
@@ -28,43 +32,51 @@ services:
       - --advertise-kafka-addr PLAINTEXT://redpanda:9092
     ports:
       - "9092:9092"
-      - "9644:9644"  # Admin API
+      - "9644:9644"
     healthcheck:
       test: ["CMD", "rpk", "cluster", "health"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Base de datos analítica (OLAP)
-  clickhouse:
-    image: clickhouse/clickhouse-server:23.8-alpine
+  # Base de datos analítica (OLAP) - TimescaleDB para ARM
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    environment:
+      POSTGRES_DB: analytics
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secret
     ports:
-      - "8123:8123"  # HTTP
-      - "9000:9000"  # Native
+      - "5433:5432"
     volumes:
-      - ./clickhouse/init:/docker-entrypoint-initdb.d
-      - clickhouse_data:/var/lib/clickhouse
-    depends_on:
-      redpanda:
-        condition: service_healthy
+      - timescale_data:/var/lib/postgresql/data
+      - ./timescaledb/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d analytics"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # Capa semántica
+  # Capa semántica - Cube.js conectado a TimescaleDB
   cube:
     image: cubejs/cube:latest
     ports:
       - "4000:4000"
     environment:
-      CUBEJS_DB_TYPE: clickhouse
-      CUBEJS_DB_HOST: clickhouse
-      CUBEJS_DB_PORT: 8123
-      CUBEJS_DB_NAME: default
+      CUBEJS_DB_TYPE: postgres
+      CUBEJS_DB_HOST: timescaledb
+      CUBEJS_DB_PORT: 5432
+      CUBEJS_DB_NAME: analytics
+      CUBEJS_DB_USER: admin
+      CUBEJS_DB_PASS: secret
       CUBEJS_API_SECRET: your-secret-key-change-in-production
       CUBEJS_DEV_MODE: "true"
     volumes:
       - ./cube/schema:/cube/conf/schema
     depends_on:
-      - clickhouse
+      timescaledb:
+        condition: service_healthy
 
 volumes:
   postgres_data:
-  clickhouse_data:
+  timescale_data:
