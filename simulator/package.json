@@ -1,0 +1,14 @@
+{
+  "name": "observability-simulator",
+  "version": "1.0.0",
+  "description": "Simula operaciones para la PoC de observabilidad",
+  "main": "simulator.js",
+  "scripts": {
+    "start": "node simulator.js",
+    "start:fast": "INTERVAL=500 node simulator.js"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "pg": "^8.11.3"
+  }
+}
