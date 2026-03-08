@@ -34,7 +34,9 @@ docker compose -f docker-compose.arm.yml up -d
 | **ClickHouse** | 8123 | Base de datos OLAP (x86_64) |
 | **TimescaleDB** | 5433 | Alternativa OLAP para ARM |
 | **PostgreSQL** | 5432 | Base de datos OLTP |
-| **Redpanda** | 9092 | Message broker (Kafka-compatible) |
+| **Redpanda** | 9092 / 19092 | Message broker (Kafka-compatible) |
+
+> **Nota Redpanda**: Puerto `9092` para comunicación interna (entre contenedores Docker), puerto `19092` para acceso externo (desde el host).
 
 ## 🏗️ Arquitectura
 
@@ -73,6 +75,26 @@ docker compose -f docker-compose.arm.yml up -d
 ```
 
 ## 🧪 Demo
+
+### Ejecutar el Simulador
+
+El simulador genera pedidos aleatorios y los envía a PostgreSQL (OLTP) y Redpanda (streaming).
+
+```bash
+# Instalar dependencias
+cd simulator && npm install && cd ..
+
+# Ejecutar (desde el host, fuera de Docker)
+KAFKA_BROKER=localhost:19092 node simulator/simulator.js
+
+# O desde dentro de Docker (otro contenedor)
+KAFKA_BROKER=redpanda:9092 node simulator/simulator.js
+```
+
+Variables de entorno:
+- `KAFKA_BROKER`: Broker Kafka/Redpanda (default: `localhost:9092`)
+- `PG_URL`: Connection string PostgreSQL (default: `postgres://admin:secret@localhost:5432/operations`)
+- `INTERVAL`: Milisegundos entre pedidos (default: `2000`)
 
 ### Probar Cube.js Playground
 

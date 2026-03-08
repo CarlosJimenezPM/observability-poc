@@ -28,10 +28,11 @@ services:
       - --smp 1
       - --memory 512M
       - --overprovisioned
-      - --kafka-addr PLAINTEXT://0.0.0.0:9092
-      - --advertise-kafka-addr PLAINTEXT://redpanda:9092
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
     ports:
-      - "9092:9092"
+      - "19092:19092"  # External (host access)
+      - "9092:9092"    # Internal (docker network)
       - "9644:9644"
     healthcheck:
       test: ["CMD", "rpk", "cluster", "health"]
