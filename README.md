@@ -2,7 +2,7 @@
 
 Arquitectura de referencia para plataformas de observabilidad multi-tenant con separación OLTP/OLAP.
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/YOUR_USERNAME/observability-poc?quickstart=1)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/CarlosJimenezPM/observavility-poc?quickstart=1)
 
 ## 🚀 Quick Start
 
@@ -15,8 +15,8 @@ Arquitectura de referencia para plataformas de observabilidad multi-tenant con s
 ### Opción 2: Local (x86_64)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/observability-poc.git
-cd observability-poc
+git clone https://github.com/CarlosJimenezPM/observavility-poc.git
+cd observavility-poc
 docker compose up -d
 ```
 
@@ -176,11 +176,15 @@ observability-poc/
 ## 📚 Documentación
 
 - [00 - Resumen Ejecutivo](docs/00-resumen-ejecutivo.md)
-- [01 - Arquitectura General](docs/01-arquitectura-general.md)
-- [02 - Almacenamiento TSDB](docs/02-almacenamiento-tsdb.md)
-- [03 - Capa de Entrega](docs/03-capa-entrega.md)
+- [01 - Fundamentos de Arquitectura](docs/01-fundamentos-arquitectura.md)
+- [02 - Desafíos Críticos](docs/02-desafios-criticos.md)
+- [03 - Patrón OLTP/OLAP](docs/03-patron-oltp-olap.md)
+- [04 - Arquitectura Multitenant](docs/04-arquitectura-multitenant.md)
+- [05 - Seguridad para Dashboards](docs/05-seguridad-dashboards.md)
+- [10 - Plan de Implementación PoC](docs/10-plan-implementacion-poc.md)
 - [15 - Compatibilidad Arquitecturas (x86 vs ARM)](docs/15-compatibilidad-arquitecturas.md) ⭐
-- [Más docs...](docs/)
+
+[Ver todos los docs →](docs/)
 
 ## 🔐 Seguridad Multi-tenant
 
