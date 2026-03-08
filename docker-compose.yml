@@ -1,17 +1,26 @@
+# ===========================================
+# Observability PoC - Docker Compose (x86_64)
+# ===========================================
+# ⚠️  SECURITY WARNING:
+# Default values are for LOCAL DEVELOPMENT ONLY.
+# For production, create a .env file with secure values.
+# See .env.example for required variables.
+# ===========================================
+
 services:
   # Base de datos operacional (OLTP)
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: operations
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: ${POSTGRES_DB:-operations}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
     ports:
-      - "5432:5432"
+      - "5432:5432"  # ⚠️ Production: remove or use internal network only
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d operations"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-operations}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -29,7 +38,7 @@ services:
     ports:
       - "19092:19092"  # External (host access)
       - "9092:9092"    # Internal (docker network)
-      - "9644:9644"    # Admin API
+      - "9644:9644"    # Admin API - ⚠️ Production: remove this port
     healthcheck:
       test: ["CMD", "rpk", "cluster", "health"]
       interval: 10s
@@ -39,9 +48,12 @@ services:
   # Base de datos analítica (OLAP)
   clickhouse:
     image: clickhouse/clickhouse-server:23.8-alpine
+    environment:
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
     ports:
-      - "8123:8123"  # HTTP
-      - "9000:9000"  # Native
+      - "8123:8123"  # HTTP - ⚠️ Production: remove or use internal network only
+      - "9000:9000"  # Native - ⚠️ Production: remove
     volumes:
       - ./clickhouse/init:/docker-entrypoint-initdb.d
       - clickhouse_data:/var/lib/clickhouse
@@ -59,10 +71,15 @@ services:
       CUBEJS_DB_HOST: clickhouse
       CUBEJS_DB_PORT: 8123
       CUBEJS_DB_NAME: default
-      CUBEJS_API_SECRET: your-secret-key-change-in-production
-      CUBEJS_DEV_MODE: "true"
+      CUBEJS_DB_USER: ${CLICKHOUSE_USER:-default}
+      CUBEJS_DB_PASS: ${CLICKHOUSE_PASSWORD:-}
+      # ⚠️ SECURITY: Generate a secure secret for production
+      # Use: openssl rand -hex 32
+      CUBEJS_API_SECRET: ${CUBEJS_API_SECRET:-dev-secret-change-in-production}
+      # ⚠️ SECURITY: Set to "false" in production
+      CUBEJS_DEV_MODE: ${CUBEJS_DEV_MODE:-true}
     volumes:
-      - ./cube/schema:/cube/conf/schema
+      - ./cube:/cube/conf
     depends_on:
       - clickhouse
 

@@ -26,6 +26,41 @@ docker compose up -d
 docker compose -f docker-compose.arm.yml up -d
 ```
 
+## ⚠️ Seguridad
+
+> **IMPORTANTE**: Este proyecto está configurado para **desarrollo local únicamente**. Los valores por defecto NO son seguros para producción.
+
+### Antes de desplegar en producción:
+
+1. **Configura variables de entorno seguras**
+   ```bash
+   cp .env.example .env
+   # Edita .env con contraseñas fuertes
+   # Genera el secret de Cube.js: openssl rand -hex 32
+   ```
+
+2. **Desactiva el modo desarrollo de Cube.js**
+   ```bash
+   CUBEJS_DEV_MODE=false
+   ```
+
+3. **Restringe los puertos expuestos**
+   - Solo expón el puerto de la aplicación (4000 para Cube.js)
+   - Bases de datos y Redpanda admin deben ser internos
+
+4. **Usa JWT firmados para autenticación**
+   - Los tokens Base64 del demo (`test_multitenancy.sh`) son solo para pruebas
+   - En producción, implementa JWT con firma RS256/HS256
+
+### Riesgos en la configuración actual (desarrollo):
+
+| Riesgo | Archivo | Mitigación |
+|--------|---------|------------|
+| Contraseñas en texto plano | `docker-compose*.yml` | Usar `.env` (en `.gitignore`) |
+| `CUBEJS_DEV_MODE=true` | `docker-compose*.yml` | Cambiar a `false` en producción |
+| Puertos DB expuestos | `docker-compose*.yml` | Usar red interna Docker |
+| Tokens Base64 sin firma | `demo/*.sh` | Implementar JWT firmados |
+
 ## 📦 Servicios
 
 | Servicio | Puerto | Descripción |
@@ -123,12 +158,14 @@ curl "http://localhost:8123/" -d "SELECT tenant_id, count() FROM orders GROUP BY
 ```
 observability-poc/
 ├── .devcontainer/          # Config GitHub Codespaces
+├── .env.example            # Template de variables de entorno
+├── .gitignore              # Archivos excluidos (incluye .env)
 ├── clickhouse/
 │   └── init/               # Scripts inicialización ClickHouse
 ├── timescaledb/
 │   └── init/               # Scripts inicialización TimescaleDB (ARM)
 ├── cube/
-│   └── schema/             # Modelos Cube.js
+│   └── model/              # Modelos Cube.js (YAML)
 ├── simulator/              # Generador de datos de prueba
 ├── demo/                   # Scripts de validación
 ├── docs/                   # Documentación técnica
@@ -152,6 +189,32 @@ El aislamiento de datos se implementa en múltiples capas:
 1. **Cube.js**: `queryRewrite` inyecta filtro `tenant_id` automáticamente
 2. **ClickHouse**: Row-level policies (opcional)
 3. **Redpanda**: Topics por tenant o headers de partición
+
+### Autenticación (Producción)
+
+El script `demo/test_multitenancy.sh` usa tokens Base64 simples para demostración. En producción:
+
+```javascript
+// cube.js - Ejemplo con JWT firmado
+module.exports = {
+  checkAuth: (req, auth) => {
+    // Verificar JWT con tu librería preferida (jsonwebtoken, jose, etc.)
+    const token = jwt.verify(auth, process.env.CUBEJS_API_SECRET);
+    req.securityContext = { tenantId: token.tenantId };
+  },
+  queryRewrite: (query, { securityContext }) => {
+    if (!securityContext.tenantId) {
+      throw new Error('No tenant context');
+    }
+    query.filters.push({
+      member: 'Orders.tenantId',
+      operator: 'equals',
+      values: [securityContext.tenantId]
+    });
+    return query;
+  }
+};
+```
 
 ## 🛠️ Tecnologías
 

@@ -1,21 +1,30 @@
-# Versión ARM64 - Usa TimescaleDB en lugar de ClickHouse
-# Para Raspberry Pi, Apple Silicon, etc.
-# Uso: docker compose -f docker-compose.arm.yml up -d
+# ===========================================
+# Observability PoC - Docker Compose (ARM64)
+# ===========================================
+# For Raspberry Pi, Apple Silicon, etc.
+# Uses TimescaleDB instead of ClickHouse
+# Usage: docker compose -f docker-compose.arm.yml up -d
+# ===========================================
+# ⚠️  SECURITY WARNING:
+# Default values are for LOCAL DEVELOPMENT ONLY.
+# For production, create a .env file with secure values.
+# See .env.example for required variables.
+# ===========================================
 
 services:
   # Base de datos operacional (OLTP)
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: operations
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: ${POSTGRES_DB:-operations}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
     ports:
-      - "5432:5432"
+      - "5432:5432"  # ⚠️ Production: remove or use internal network only
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d operations"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-operations}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -33,7 +42,7 @@ services:
     ports:
       - "19092:19092"  # External (host access)
       - "9092:9092"    # Internal (docker network)
-      - "9644:9644"
+      - "9644:9644"    # Admin API - ⚠️ Production: remove this port
     healthcheck:
       test: ["CMD", "rpk", "cluster", "health"]
       interval: 10s
@@ -44,16 +53,16 @@ services:
   timescaledb:
     image: timescale/timescaledb:latest-pg15
     environment:
-      POSTGRES_DB: analytics
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: ${TIMESCALE_DB:-analytics}
+      POSTGRES_USER: ${TIMESCALE_USER:-admin}
+      POSTGRES_PASSWORD: ${TIMESCALE_PASSWORD:-secret}
     ports:
-      - "5433:5432"
+      - "5433:5432"  # ⚠️ Production: remove or use internal network only
     volumes:
       - timescale_data:/var/lib/postgresql/data
       - ./timescaledb/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d analytics"]
+      test: ["CMD-SHELL", "pg_isready -U ${TIMESCALE_USER:-admin} -d ${TIMESCALE_DB:-analytics}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -67,11 +76,14 @@ services:
       CUBEJS_DB_TYPE: postgres
       CUBEJS_DB_HOST: timescaledb
       CUBEJS_DB_PORT: 5432
-      CUBEJS_DB_NAME: analytics
-      CUBEJS_DB_USER: admin
-      CUBEJS_DB_PASS: secret
-      CUBEJS_API_SECRET: your-secret-key-change-in-production
-      CUBEJS_DEV_MODE: "true"
+      CUBEJS_DB_NAME: ${TIMESCALE_DB:-analytics}
+      CUBEJS_DB_USER: ${TIMESCALE_USER:-admin}
+      CUBEJS_DB_PASS: ${TIMESCALE_PASSWORD:-secret}
+      # ⚠️ SECURITY: Generate a secure secret for production
+      # Use: openssl rand -hex 32
+      CUBEJS_API_SECRET: ${CUBEJS_API_SECRET:-dev-secret-change-in-production}
+      # ⚠️ SECURITY: Set to "false" in production
+      CUBEJS_DEV_MODE: ${CUBEJS_DEV_MODE:-true}
       CUBEJS_SCHEMA_PATH: /cube/conf/model
     volumes:
       - ./cube:/cube/conf

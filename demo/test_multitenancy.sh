@@ -4,6 +4,11 @@
 # =============================================
 # Demuestra que cada tenant solo ve sus datos
 # =============================================
+# ⚠️  SECURITY WARNING:
+# Los tokens Base64 usados aquí son SOLO para demo.
+# En producción, usa JWT firmados con RS256/HS256.
+# Ver README.md sección "Seguridad Multi-tenant".
+# =============================================
 
 CUBE_URL="http://localhost:4000/cubejs-api/v1"
 
