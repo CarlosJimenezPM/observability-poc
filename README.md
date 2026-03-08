@@ -2,6 +2,40 @@
 
 Arquitectura de referencia para plataformas de observabilidad multi-tenant con separación OLTP/OLAP.
 
+## 🎯 ¿Qué hace este proyecto?
+
+Este PoC demuestra cómo construir una **plataforma SaaS multi-tenant** que:
+
+1. **Separa operación de analítica** — Las operaciones del día a día (OLTP) no compiten con los dashboards y reportes (OLAP)
+2. **Garantiza aislamiento de datos** — Cada tenant solo ve sus propios datos, imposible acceder a datos de otros clientes
+3. **Escala independientemente** — La carga analítica no afecta el rendimiento operacional
+4. **Está preparada para IA** — Incluye servidor MCP para que agentes de IA consulten datos de forma segura
+
+### El problema que resuelve
+
+En un SaaS típico, cuando 100 usuarios abren dashboards a las 9AM, la base de datos operacional se satura y las operaciones del día a día se ralentizan. Además, si no hay controles estrictos, un bug podría filtrar datos entre clientes.
+
+### La solución
+
+```
+┌─────────────┐     CDC      ┌─────────────┐     Cube.js    ┌─────────────┐
+│ PostgreSQL  │─────────────▶│  Redpanda   │───────────────▶│ ClickHouse  │
+│   (OLTP)    │  streaming   │  (eventos)  │   ingest       │   (OLAP)    │
+│ operaciones │              │             │                │ dashboards  │
+└─────────────┘              └─────────────┘                └──────┬──────┘
+                                                                   │
+                                                            ┌──────▼──────┐
+                                                            │   Cube.js   │
+                                                            │ + tenant_id │
+                                                            │   SIEMPRE   │
+                                                            └─────────────┘
+```
+
+- **PostgreSQL**: Donde ocurren las operaciones (crear pedidos, actualizar estados)
+- **Redpanda**: Captura cambios en tiempo real (CDC) y los transmite
+- **ClickHouse/TimescaleDB**: Almacén optimizado para consultas analíticas masivas
+- **Cube.js**: Capa semántica que inyecta `tenant_id` en TODAS las consultas (seguridad multi-tenant)
+
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/CarlosJimenezPM/observavility-poc?quickstart=1)
 
 ## 🚀 Quick Start
