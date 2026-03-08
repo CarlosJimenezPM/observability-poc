@@ -132,14 +132,23 @@ queryRewrite: (query, { securityContext }) => {
 
 ## 📚 Documentación
 
-| Doc | Tema |
-|-----|------|
-| [00-resumen-ejecutivo](docs/00-resumen-ejecutivo.md) | TL;DR + diagrama |
-| [06-patron-oltp-olap](docs/06-patron-oltp-olap.md) | Dos bases de datos |
-| [07-arquitectura-multitenant](docs/07-arquitectura-multitenant.md) | Aislamiento lógico |
-| [09-patrones-escritura](docs/09-patrones-escritura.md) | CDC vs Dual-write |
-| [10-implementacion-azure](docs/10-implementacion-azure.md) | Mapeo a Azure |
-| [12-mcp-cube-integracion](docs/12-mcp-cube-integracion.md) | IA + MCP |
+| # | Doc | Tema |
+|---|-----|------|
+| 00 | [resumen-ejecutivo](docs/00-resumen-ejecutivo.md) | TL;DR + diagrama completo |
+| 01 | [arquitectura-general](docs/01-arquitectura-general.md) | Event-Driven, Ingesta |
+| 02 | [almacenamiento-tsdb](docs/02-almacenamiento-tsdb.md) | ClickHouse, ADX, TimescaleDB |
+| 03 | [capa-entrega](docs/03-capa-entrega.md) | Push vs Pull, WebSockets |
+| 04 | [stack-comparativa](docs/04-stack-comparativa.md) | Batch vs Streaming |
+| 05 | [desafios-criticos](docs/05-desafios-criticos.md) | Backpressure, costos |
+| 06 | [patron-oltp-olap](docs/06-patron-oltp-olap.md) | Dos bases de datos |
+| 07 | [arquitectura-multitenant](docs/07-arquitectura-multitenant.md) | Aislamiento lógico, RLS |
+| 08 | [seguridad-dashboards](docs/08-seguridad-dashboards-custom.md) | Semantic Layer, Cube.js |
+| 09 | [patrones-escritura](docs/09-patrones-escritura.md) | CDC, Outbox, Telemetría |
+| 10 | [implementacion-azure](docs/10-implementacion-azure.md) | Servicios Azure |
+| 11 | [integracion-agentes-ia](docs/11-integracion-agentes-ia.md) | IA + Capa Semántica |
+| 12 | [mcp-cube-integracion](docs/12-mcp-cube-integracion.md) | MCP + Cube.js |
+| 13 | [olap-vs-vectorial](docs/13-olap-vs-vectorial.md) | Columnar vs Vectorial |
+| 14 | [plan-implementacion-poc](docs/14-plan-implementacion-poc.md) | Código de la PoC |
 
 ## 📝 Notas
 

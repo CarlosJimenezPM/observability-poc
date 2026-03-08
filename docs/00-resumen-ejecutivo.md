@@ -95,6 +95,25 @@
 
 ---
 
+## PoC Funcional
+
+La teoría está implementada en código ejecutable:
+
+```bash
+# Levantar infraestructura completa
+docker-compose up -d
+
+# Generar datos de prueba
+cd simulator && npm install && npm start
+
+# Demo de seguridad multitenant
+./demo/test_multitenancy.sh
+```
+
+Ver [14-plan-implementacion-poc](14-plan-implementacion-poc.md) para detalles técnicos.
+
+---
+
 ## Documentación Detallada
 
 | Doc | Tema |
@@ -111,3 +130,5 @@
 | [10-implementacion-azure](10-implementacion-azure.md) | Servicios Azure específicos |
 | [11-integracion-agentes-ia](11-integracion-agentes-ia.md) | IA + Capa Semántica |
 | [12-mcp-cube-integracion](12-mcp-cube-integracion.md) | MCP + Cube.js |
+| [13-olap-vs-vectorial](13-olap-vs-vectorial.md) | Columnar vs Vectorial |
+| [14-plan-implementacion-poc](14-plan-implementacion-poc.md) | Código de la PoC |
