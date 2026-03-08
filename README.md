@@ -157,20 +157,32 @@ curl "http://localhost:8123/" -d "SELECT tenant_id, count() FROM orders GROUP BY
 
 ```
 observability-poc/
-├── .devcontainer/          # Config GitHub Codespaces
+├── .devcontainer/
+│   └── devcontainer.json   # Config GitHub Codespaces
 ├── .env.example            # Template de variables de entorno
 ├── .gitignore              # Archivos excluidos (incluye .env)
 ├── clickhouse/
-│   └── init/               # Scripts inicialización ClickHouse
+│   └── init/
+│       └── 01_create_tables.sql
 ├── timescaledb/
-│   └── init/               # Scripts inicialización TimescaleDB (ARM)
+│   └── init/
+│       └── 01_create_tables.sql
 ├── cube/
-│   └── model/              # Modelos Cube.js (YAML)
-├── simulator/              # Generador de datos de prueba
-├── demo/                   # Scripts de validación
+│   ├── cube.js             # Configuración Cube.js
+│   └── model/
+│       └── Orders.yaml     # Schema dimensional
+├── mcp-server/             # Servidor MCP para integración IA
+│   ├── index.js
+│   └── package.json
+├── simulator/
+│   ├── simulator.js        # Generador de datos de prueba
+│   └── package.json
+├── demo/
+│   ├── test_multitenancy.sh
+│   └── validate_poc.sh
 ├── docs/                   # Documentación técnica
-├── docker-compose.yml      # Stack principal (x86_64)
-└── docker-compose.arm.yml  # Stack alternativo (ARM64)
+├── docker-compose.yml      # Stack x86_64 (ClickHouse)
+└── docker-compose.arm.yml  # Stack ARM64 (TimescaleDB)
 ```
 
 ## 📚 Documentación
