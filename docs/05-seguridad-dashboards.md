@@ -161,3 +161,42 @@ Para SaaS Operativo con Dashboards Custom:
 ```
 
 **Defensa en profundidad:** Usa ambas capas.
+
+---
+
+## Configuración Segura del PoC
+
+### Variables de Entorno
+
+El PoC usa un archivo `.env` para manejar secretos (ver `.env.example`):
+
+```bash
+# Copiar template
+cp .env.example .env
+
+# Generar secret seguro para Cube.js
+openssl rand -hex 32
+```
+
+### Checklist de Producción
+
+| Configuración | Desarrollo | Producción |
+|---------------|------------|------------|
+| `CUBEJS_DEV_MODE` | `true` | `false` |
+| `CUBEJS_API_SECRET` | Cualquier valor | Secret generado (32+ bytes) |
+| Puertos DB expuestos | Sí (debug) | No (red interna Docker) |
+| Tokens de autenticación | Base64 simple | JWT firmados (RS256/HS256) |
+
+### Ejemplo: JWT en Producción
+
+```javascript
+// cube.js
+const jwt = require('jsonwebtoken');
+
+module.exports = {
+  checkAuth: (req, auth) => {
+    const token = jwt.verify(auth, process.env.CUBEJS_API_SECRET);
+    req.securityContext = { tenantId: token.tenantId };
+  }
+};
+```

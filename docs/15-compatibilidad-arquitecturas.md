@@ -95,6 +95,31 @@ docker-compose.arm.yml
 └── Cube.js (Capa semántica)
 ```
 
+## Configuración de Red: Dual Listener en Redpanda
+
+Para permitir conexiones tanto desde contenedores Docker como desde el host, Redpanda está configurado con dos listeners:
+
+```yaml
+command:
+  - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+  - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+```
+
+| Listener | Puerto | Uso |
+|----------|--------|-----|
+| `internal` | 9092 | Comunicación entre contenedores Docker |
+| `external` | 19092 | Acceso desde el host (simulador local, debugging) |
+
+### Ejecutar el Simulador
+
+```bash
+# Desde el host (fuera de Docker)
+KAFKA_BROKER=localhost:19092 node simulator/simulator.js
+
+# Desde otro contenedor Docker
+KAFKA_BROKER=redpanda:9092 node simulator/simulator.js
+```
+
 ## Compatibilidad del Schema de Cube.js
 
 El schema de Cube.js se diseñó para ser compatible con ambas bases de datos:

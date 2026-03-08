@@ -29,18 +29,19 @@ Levanta los 4 servicios:
 - ClickHouse (OLAP)
 - Cube.js (Semantic Layer)
 
+> ⚠️ **Seguridad:** Los valores por defecto son solo para desarrollo local. Ver `.env.example` para configuración de producción.
+
 ```yaml
-# docker-compose.yml
-version: '3.8'
+# docker-compose.yml (simplificado)
 services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_DB: operations
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: ${POSTGRES_DB:-operations}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
     ports:
-      - "5432:5432"
+      - "5432:5432"  # ⚠️ Producción: usar red interna
 
   redpanda:
     image: redpandadata/redpanda:latest
@@ -49,8 +50,12 @@ services:
       - --smp 1
       - --memory 512M
       - --overprovisioned
+      # Dual listener: interno (Docker) + externo (host)
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
     ports:
-      - "9092:9092"
+      - "19092:19092"  # Acceso desde host
+      - "9092:9092"    # Red interna Docker
 
   clickhouse:
     image: clickhouse/clickhouse-server:latest
@@ -67,8 +72,10 @@ services:
     environment:
       CUBEJS_DB_TYPE: clickhouse
       CUBEJS_DB_HOST: clickhouse
+      CUBEJS_API_SECRET: ${CUBEJS_API_SECRET:-dev-secret}
+      CUBEJS_DEV_MODE: ${CUBEJS_DEV_MODE:-true}  # ⚠️ false en producción
     volumes:
-      - ./cube/schema:/cube/conf/schema
+      - ./cube:/cube/conf
 ```
 
 ---
@@ -204,8 +211,11 @@ cube('Orders', {
 
 ```
 observability-poc/
+├── .env.example             # Template de variables (copiar a .env)
+├── .gitignore               # Excluye .env, node_modules, etc.
 ├── README.md
-├── docker-compose.yml
+├── docker-compose.yml       # Stack x86_64 (ClickHouse)
+├── docker-compose.arm.yml   # Stack ARM64 (TimescaleDB)
 ├── docs/                    # Documentación arquitectónica
 ├── simulator/
 │   ├── package.json
@@ -213,21 +223,25 @@ observability-poc/
 ├── clickhouse/
 │   └── init/
 │       └── 01_create_tables.sql
+├── timescaledb/
+│   └── init/                # Scripts para ARM
 ├── cube/
-│   └── schema/
-│       └── Orders.js
+│   └── model/
+│       └── Orders.yaml      # Schema Cube.js
 └── demo/
-    └── test_multitenancy.sh  # Scripts de demo
+    └── test_multitenancy.sh # Scripts de demo
 ```
 
 ---
 
 ## Demo de Seguridad Multitenant
 
+> ⚠️ **SOLO PARA DEMO:** Los tokens Base64 no son seguros. En producción, usa JWT firmados con RS256/HS256.
+
 ```bash
 # test_multitenancy.sh
 
-# Token para Tenant A
+# Token para Tenant A (⚠️ Base64 = solo demo)
 TOKEN_A=$(echo '{"tenantId":"tenant_A"}' | base64)
 
 # Token para Tenant B  
@@ -242,6 +256,21 @@ curl -H "Authorization: Bearer $TOKEN_B" \
   "http://localhost:4000/cubejs-api/v1/load?query={\"measures\":[\"Orders.totalAmount\"]}"
 
 # Cada uno ve SOLO sus datos
+```
+
+### Producción: JWT Firmados
+
+```javascript
+// cube.js
+const jwt = require('jsonwebtoken');
+
+module.exports = {
+  checkAuth: (req, auth) => {
+    // Verificar firma del JWT
+    const decoded = jwt.verify(auth, process.env.CUBEJS_API_SECRET);
+    req.securityContext = { tenantId: decoded.tenantId };
+  }
+};
 ```
 
 ---
