@@ -97,15 +97,17 @@ La DB misma rechaza queries sin permiso.
 ### Flujo
 
 ```sql
--- 1. Backend setea variable de sesión al conectar
-SET parameter tenant_id = 'cliente_A';
+-- PostgreSQL:
+SET app.current_tenant = 'cliente_A';
+CREATE POLICY tenant_isolation ON sales
+  USING (tenant_id = current_setting('app.current_tenant'));
 
--- 2. DB tiene política pre-configurada
+-- ClickHouse:
+SET param_tenant_id = 'cliente_A';
 CREATE ROW POLICY filter_tenant ON sales 
-FOR SELECT 
-USING tenant_id = currentUser();
+  FOR SELECT USING tenant_id = getSetting('param_tenant_id');
 
--- 3. Cualquier SELECT se filtra automáticamente
+-- Cualquier SELECT se filtra automáticamente
 ```
 
 ### Soporte por DB
