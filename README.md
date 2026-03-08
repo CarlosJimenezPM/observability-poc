@@ -120,6 +120,7 @@ observability-poc/
 - [01 - Arquitectura General](docs/01-arquitectura-general.md)
 - [02 - Almacenamiento TSDB](docs/02-almacenamiento-tsdb.md)
 - [03 - Capa de Entrega](docs/03-capa-entrega.md)
+- [15 - Compatibilidad Arquitecturas (x86 vs ARM)](docs/15-compatibilidad-arquitecturas.md) ⭐
 - [Más docs...](docs/)
 
 ## 🔐 Seguridad Multi-tenant
