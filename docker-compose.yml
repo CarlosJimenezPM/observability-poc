@@ -61,6 +61,17 @@ services:
       redpanda:
         condition: service_healthy
 
+  # Cache para Cube.js
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # Capa semántica
   cube:
     image: cubejs/cube:latest
@@ -78,10 +89,16 @@ services:
       CUBEJS_API_SECRET: ${CUBEJS_API_SECRET:-dev-secret-change-in-production}
       # ⚠️ SECURITY: Set to "false" in production
       CUBEJS_DEV_MODE: ${CUBEJS_DEV_MODE:-true}
+      # Redis cache
+      CUBEJS_CACHE_AND_QUEUE_DRIVER: redis
+      CUBEJS_REDIS_URL: redis://redis:6379
     volumes:
       - ./cube:/cube/conf
     depends_on:
-      - clickhouse
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_started
 
 volumes:
   postgres_data:

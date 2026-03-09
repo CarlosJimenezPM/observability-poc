@@ -103,6 +103,7 @@ docker compose -f docker-compose.arm.yml up -d
 | Servicio | Puerto | Descripción |
 |----------|--------|-------------|
 | **Cube.js** | 4000 | Capa semántica + Playground |
+| **Redis** | 6379 | Cache para Cube.js |
 | **ClickHouse** | 8123 | Base de datos OLAP (x86_64) |
 | **TimescaleDB** | 5433 | Alternativa OLAP para ARM |
 | **PostgreSQL** | 5432 | Base de datos OLTP |
