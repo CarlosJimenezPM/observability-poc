@@ -39,28 +39,40 @@ En un SaaS típico, cuando 100 usuarios abren dashboards a las 9AM, la base de d
 
 > **Nota**: El simulador hace dual-write para simplificar el PoC. En producción usarías **Debezium CDC** para capturar cambios de PostgreSQL automáticamente.
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/CarlosJimenezPM/observavility-poc?quickstart=1)
-
 ## 🚀 Quick Start
 
-### Opción 1: GitHub Codespaces (Recomendado)
+### Opción 1: GitHub Codespaces (Un click)
 
-1. Click en el botón "Open in GitHub Codespaces" arriba
-2. Espera ~2 minutos a que el entorno se configure
-3. Accede a Cube.js Playground en el puerto 4000
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/CarlosJimenezPM/observavility-poc?quickstart=1)
 
-### Opción 2: Local (x86_64)
+### Opción 2: Local con Make
 
 ```bash
 git clone https://github.com/CarlosJimenezPM/observavility-poc.git
 cd observavility-poc
-docker compose up -d
+
+make start        # Levanta Docker + instala deps
+
+# En terminales separadas:
+make simulator    # Genera datos de prueba
+make frontend     # UI en http://localhost:3000
 ```
 
-### Opción 3: Local (ARM64 - Raspberry Pi / Apple Silicon)
+### Opción 3: ARM64 (Raspberry Pi / Apple Silicon)
 
 ```bash
 docker compose -f docker-compose.arm.yml up -d
+make install && make simulator
+```
+
+### Comandos disponibles
+
+```bash
+make help         # Ver todos los comandos
+make up           # Solo Docker
+make down         # Parar todo
+make demo         # Test JWT multitenancy
+make clean        # Limpiar todo
 ```
 
 ## ⚠️ Seguridad
@@ -149,70 +161,28 @@ docker compose -f docker-compose.arm.yml up -d
 
 ## 🧪 Demo
 
-### Ejecutar el Simulador
-
-El simulador genera pedidos aleatorios y los envía a PostgreSQL (OLTP) y Redpanda (streaming).
+### Frontend (Recomendado)
 
 ```bash
-# Instalar dependencias
-cd simulator && npm install && cd ..
-
-# Ejecutar (desde el host, fuera de Docker)
-KAFKA_BROKER=localhost:19092 node simulator/simulator.js
-
-# O desde dentro de Docker (otro contenedor)
-KAFKA_BROKER=redpanda:9092 node simulator/simulator.js
+make frontend     # http://localhost:3000
 ```
 
-Variables de entorno:
-- `KAFKA_BROKER`: Broker Kafka/Redpanda (default: `localhost:9092`)
-- `PG_URL`: Connection string PostgreSQL (default: `postgres://admin:secret@localhost:5432/operations`)
-- `INTERVAL`: Milisegundos entre pedidos (default: `2000`)
-
-### Probar Cube.js Playground
-
-1. Abre http://localhost:4000
-2. Explora el schema `Orders`
-3. Construye queries arrastrando dimensiones y medidas
-
-### Query ClickHouse directo
-
-```bash
-# Versión del servidor
-curl "http://localhost:8123/" -d "SELECT version()"
-
-# Contar orders por tenant
-curl "http://localhost:8123/" -d "SELECT tenant_id, count() FROM orders GROUP BY tenant_id"
-```
-
-### 🖥️ Demo Frontend (Recomendado)
-
-```bash
-# Instalar y ejecutar
-cd frontend && npm install
-npm start
-
-# Abrir http://localhost:3000
-```
-
-El frontend incluye:
 - **Login por tenant** — Selecciona Tenant A, B o C
 - **Dashboard** — Gráficos en tiempo real desde Cube.js
 - **Crear pedidos** — Escribe a PostgreSQL → Redpanda → ClickHouse
 
-### Validar multitenancy (JWT)
+### Otras formas de probar
 
 ```bash
-cd demo && npm install && cd ..
-./demo/test_multitenancy.sh
+make simulator              # Genera datos en background
+make demo                   # Test JWT multitenancy (CLI)
+open http://localhost:4000  # Cube.js Playground
 ```
 
-### Generar tokens JWT
+### Query directo a ClickHouse
 
 ```bash
-cd demo
-node generate-token.js tenant_A    # Token para Tenant A
-node generate-token.js tenant_B    # Token para Tenant B
+curl "http://localhost:8123/" -d "SELECT tenant_id, count() FROM orders GROUP BY tenant_id"
 ```
 
 ## 📁 Estructura
