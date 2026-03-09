@@ -89,9 +89,8 @@ services:
       CUBEJS_API_SECRET: ${CUBEJS_API_SECRET:-dev-secret-change-in-production}
       # ⚠️ SECURITY: Set to "false" in production
       CUBEJS_DEV_MODE: ${CUBEJS_DEV_MODE:-true}
-      # Redis cache
-      CUBEJS_CACHE_AND_QUEUE_DRIVER: redis
-      CUBEJS_REDIS_URL: redis://redis:6379
+      # Cache (cubestore is built-in, redis no longer supported)
+      CUBEJS_CACHE_AND_QUEUE_DRIVER: cubestore
     volumes:
       - ./cube:/cube/conf
     depends_on:

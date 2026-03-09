@@ -96,9 +96,8 @@ services:
       # ⚠️ SECURITY: Set to "false" in production
       CUBEJS_DEV_MODE: ${CUBEJS_DEV_MODE:-true}
       CUBEJS_SCHEMA_PATH: /cube/conf/model
-      # Redis cache
-      CUBEJS_CACHE_AND_QUEUE_DRIVER: redis
-      CUBEJS_REDIS_URL: redis://redis:6379
+      # Cache (cubestore is built-in, redis no longer supported)
+      CUBEJS_CACHE_AND_QUEUE_DRIVER: cubestore
     volumes:
       - ./cube:/cube/conf
     depends_on:
