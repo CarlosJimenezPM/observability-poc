@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 
-const API_SECRET = 'dev-secret-change-in-production';
+// In production, tokens should be generated server-side
+const API_SECRET = import.meta.env.VITE_CUBEJS_API_SECRET || 'dev-secret-change-in-production';
 
 // Simple JWT creation (for demo only - in production, server generates tokens)
 function createToken(tenantId) {

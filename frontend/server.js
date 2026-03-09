@@ -4,7 +4,11 @@
  * Receives orders and writes to:
  * - PostgreSQL (OLTP)
  * - Redpanda (Kafka) → ClickHouse
+ * 
+ * Configuration: Copy .env.example to .env and configure
  */
+
+require('dotenv').config();
 
 const express = require('express');
 const { Pool } = require('pg');
@@ -13,10 +17,15 @@ const { Kafka } = require('kafkajs');
 const app = express();
 app.use(express.json());
 
-// Configuration
+// Configuration from environment
 const PORT = process.env.PORT || 4001;
 const KAFKA_BROKER = process.env.KAFKA_BROKER || 'localhost:19092';
-const PG_URL = process.env.PG_URL || 'postgres://admin:secret@localhost:5432/operations';
+const PG_URL = process.env.PG_URL;
+
+if (!PG_URL) {
+  console.warn('⚠️  PG_URL not set, using default (dev only)');
+}
+const pgUrl = PG_URL || 'postgres://admin:secret@localhost:5432/operations';
 
 // Kafka producer
 const kafka = new Kafka({
@@ -26,7 +35,7 @@ const kafka = new Kafka({
 const producer = kafka.producer();
 
 // PostgreSQL pool
-const pg = new Pool({ connectionString: PG_URL });
+const pg = new Pool({ connectionString: pgUrl });
 
 // Initialize
 async function init() {
