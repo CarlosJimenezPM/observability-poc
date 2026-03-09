@@ -236,12 +236,13 @@ observability-poc/
 
 - [00 - Resumen Ejecutivo](docs/00-resumen-ejecutivo.md)
 - [01 - Fundamentos de Arquitectura](docs/01-fundamentos-arquitectura.md)
-- [02 - Desafíos Críticos](docs/02-desafios-criticos.md)
+- [02 - Desafíos Críticos](docs/02-desafios-criticos.md) ← *¿Cuándo usar esta arquitectura?*
 - [03 - Patrón OLTP/OLAP](docs/03-patron-oltp-olap.md)
 - [04 - Arquitectura Multitenant](docs/04-arquitectura-multitenant.md)
 - [05 - Seguridad para Dashboards](docs/05-seguridad-dashboards.md)
 - [10 - Plan de Implementación PoC](docs/10-plan-implementacion-poc.md)
-- [15 - Compatibilidad Arquitecturas (x86 vs ARM)](docs/15-compatibilidad-arquitecturas.md) ⭐
+- [11 - Guía de Demo](docs/11-guia-demo.md) ← *Cómo presentar al equipo*
+- [15 - Compatibilidad Arquitecturas (x86 vs ARM)](docs/15-compatibilidad-arquitecturas.md)
 
 [Ver todos los docs →](docs/)
 
