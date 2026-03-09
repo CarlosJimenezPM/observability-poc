@@ -115,6 +115,7 @@ services:
     environment:
       - KAFKA_BROKER=redpanda:9092
       - PG_URL=postgres://admin:secret@postgres:5432/operations
+      - TIMESCALE_URL=postgres://admin:secret@timescaledb:5432/analytics
       - VITE_CUBEJS_API_SECRET=${CUBEJS_API_SECRET:-dev-secret-change-in-production}
     depends_on:
       - cube

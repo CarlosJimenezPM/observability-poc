@@ -35,8 +35,10 @@ const kafka = new Kafka({
 });
 const producer = kafka.producer();
 
-// PostgreSQL pool
+// PostgreSQL pools
 const pg = new Pool({ connectionString: pgUrl });
+const TIMESCALE_URL = process.env.TIMESCALE_URL || 'postgres://admin:secret@timescaledb:5432/analytics';
+const timescale = new Pool({ connectionString: TIMESCALE_URL });
 
 // Initialize
 async function init() {
@@ -65,7 +67,7 @@ app.post('/api/orders', async (req, res) => {
   const order = req.body;
 
   try {
-    // Write to PostgreSQL
+    // Write to PostgreSQL (OLTP)
     await pg.query(
       `INSERT INTO orders (order_id, tenant_id, customer_id, product_category, amount, quantity, status, region, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
@@ -73,7 +75,19 @@ app.post('/api/orders', async (req, res) => {
        order.amount, order.quantity, order.status, order.region, order.time]
     );
 
-    // Send to Redpanda → ClickHouse
+    // Write to TimescaleDB (OLAP) - for ARM where Kafka Engine isn't available
+    try {
+      await timescale.query(
+        `INSERT INTO orders (time, tenant_id, order_id, customer_id, product_category, amount, quantity, status, region)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [order.time, order.tenant_id, order.order_id, order.customer_id, order.product_category,
+         order.amount, order.quantity, order.status, order.region]
+      );
+    } catch (e) {
+      console.warn('TimescaleDB write skipped:', e.message);
+    }
+
+    // Send to Redpanda (for x86 with ClickHouse Kafka Engine)
     await producer.send({
       topic: 'orders',
       messages: [{
