@@ -87,15 +87,6 @@ export default function Dashboard({ token, refreshKey }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Auto-refresh every 5 seconds
-  const [autoRefresh, setAutoRefresh] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setAutoRefresh(k => k + 1);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
   useEffect(() => {
     async function loadData() {
       setLoading(true);
@@ -153,7 +144,7 @@ export default function Dashboard({ token, refreshKey }) {
     }
 
     loadData();
-  }, [token, refreshKey, autoRefresh]);
+  }, [token, refreshKey]);
 
   if (loading) {
     return <div style={styles.loading}>⏳ Cargando datos...</div>;
