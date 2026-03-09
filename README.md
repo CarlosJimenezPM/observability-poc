@@ -185,6 +185,21 @@ curl "http://localhost:8123/" -d "SELECT version()"
 curl "http://localhost:8123/" -d "SELECT tenant_id, count() FROM orders GROUP BY tenant_id"
 ```
 
+### 🖥️ Demo Frontend (Recomendado)
+
+```bash
+# Instalar y ejecutar
+cd frontend && npm install
+npm start
+
+# Abrir http://localhost:3000
+```
+
+El frontend incluye:
+- **Login por tenant** — Selecciona Tenant A, B o C
+- **Dashboard** — Gráficos en tiempo real desde Cube.js
+- **Crear pedidos** — Escribe a PostgreSQL → Redpanda → ClickHouse
+
 ### Validar multitenancy (JWT)
 
 ```bash
@@ -208,6 +223,15 @@ observability-poc/
 │   └── devcontainer.json   # Config GitHub Codespaces
 ├── .env.example            # Template de variables de entorno
 ├── .gitignore              # Archivos excluidos (incluye .env)
+├── frontend/               # 🆕 Demo UI React
+│   ├── src/
+│   │   ├── App.jsx
+│   │   └── components/
+│   │       ├── Login.jsx
+│   │       ├── Dashboard.jsx
+│   │       └── OrderForm.jsx
+│   ├── server.js           # API backend
+│   └── package.json
 ├── clickhouse/
 │   └── init/
 │       └── 01_create_tables.sql
@@ -215,7 +239,7 @@ observability-poc/
 │   └── init/
 │       └── 01_create_tables.sql
 ├── cube/
-│   ├── cube.js             # Configuración Cube.js
+│   ├── cube.js             # Configuración + JWT auth
 │   └── model/
 │       └── Orders.yaml     # Schema dimensional
 ├── mcp-server/             # Servidor MCP para integración IA
@@ -226,6 +250,7 @@ observability-poc/
 │   └── package.json
 ├── demo/
 │   ├── test_multitenancy.sh
+│   ├── generate-token.js
 │   └── validate_poc.sh
 ├── docs/                   # Documentación técnica
 ├── docker-compose.yml      # Stack x86_64 (ClickHouse)
