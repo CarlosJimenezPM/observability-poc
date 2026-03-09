@@ -51,26 +51,20 @@ En un SaaS típico, cuando 100 usuarios abren dashboards a las 9AM, la base de d
 git clone https://github.com/CarlosJimenezPM/observavility-poc.git
 cd observavility-poc
 
-make start        # Levanta Docker + instala deps
-
-# En terminales separadas:
-make simulator    # Genera datos de prueba
-make frontend     # UI en http://localhost:3000
+make up           # Levanta todo (detecta arquitectura automáticamente)
+make simulator    # Genera datos de prueba (opcional)
 ```
 
-### Opción 3: ARM64 (Raspberry Pi / Apple Silicon)
-
-```bash
-docker compose -f docker-compose.arm.yml up -d
-make install && make simulator
-```
+Abre http://localhost:3000 para el frontend.
 
 ### Comandos disponibles
 
 ```bash
 make help         # Ver todos los comandos
-make up           # Solo Docker
+make up           # Levanta infra + frontend
 make down         # Parar todo
+make logs         # Ver logs
+make simulator    # Genera datos de prueba
 make demo         # Test JWT multitenancy
 make clean        # Limpiar todo
 ```
