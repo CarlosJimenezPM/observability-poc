@@ -78,7 +78,8 @@ export default function App() {
 
   const handleOrderCreated = (order) => {
     setNotification(`✓ Pedido ${order.order_id} creado`);
-    setRefreshKey(k => k + 1);
+    // Small delay to ensure data is written to TimescaleDB
+    setTimeout(() => setRefreshKey(k => k + 1), 500);
     setTimeout(() => setNotification(null), 3000);
   };
 

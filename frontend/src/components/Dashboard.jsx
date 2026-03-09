@@ -62,10 +62,13 @@ const styles = {
   }
 };
 
-async function fetchCubeData(token, query) {
-  const response = await fetch('/cubejs-api/v1/load?' + new URLSearchParams({
-    query: JSON.stringify(query)
-  }), {
+async function fetchCubeData(token, query, noCache = false) {
+  const params = { query: JSON.stringify(query) };
+  if (noCache) {
+    params.renewQuery = 'true';
+  }
+  
+  const response = await fetch('/cubejs-api/v1/load?' + new URLSearchParams(params), {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
@@ -93,10 +96,12 @@ export default function Dashboard({ token, refreshKey }) {
       setError(null);
       
       try {
+        const noCache = refreshKey > 0;
+        
         // Fetch stats
         const statsResult = await fetchCubeData(token, {
           measures: ['Orders.count', 'Orders.totalAmount', 'Orders.avgAmount']
-        });
+        }, noCache);
         
         if (statsResult.data && statsResult.data[0]) {
           setStats({
@@ -110,7 +115,7 @@ export default function Dashboard({ token, refreshKey }) {
         const categoryResult = await fetchCubeData(token, {
           measures: ['Orders.totalAmount'],
           dimensions: ['Orders.productCategory']
-        });
+        }, noCache);
         setByCategory(categoryResult.data?.map(d => ({
           name: d['Orders.productCategory'],
           value: parseFloat(d['Orders.totalAmount']) || 0
@@ -120,7 +125,7 @@ export default function Dashboard({ token, refreshKey }) {
         const regionResult = await fetchCubeData(token, {
           measures: ['Orders.count'],
           dimensions: ['Orders.region']
-        });
+        }, noCache);
         setByRegion(regionResult.data?.map(d => ({
           name: d['Orders.region'],
           value: parseInt(d['Orders.count']) || 0
@@ -130,7 +135,7 @@ export default function Dashboard({ token, refreshKey }) {
         const statusResult = await fetchCubeData(token, {
           measures: ['Orders.count'],
           dimensions: ['Orders.status']
-        });
+        }, noCache);
         setByStatus(statusResult.data?.map(d => ({
           name: d['Orders.status'],
           value: parseInt(d['Orders.count']) || 0
