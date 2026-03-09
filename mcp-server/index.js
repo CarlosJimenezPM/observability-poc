@@ -11,11 +11,26 @@ import cors from "cors";
 const CUBE_API_URL = process.env.CUBE_API_URL || "http://localhost:4000";
 const PORT = process.env.MCP_PORT || 3001;
 
+// Generate a simple token for Cube.js (dev mode accepts unsigned tokens)
+function generateToken(tenantId = "mcp-server") {
+  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64");
+  const payload = Buffer.from(JSON.stringify({ 
+    tenantId,
+    userId: "mcp-server",
+    role: "admin"
+  })).toString("base64");
+  return `${header}.${payload}.mcp-signature`;
+}
+
 // Helper para llamar a Cube.js
-async function cubeQuery(endpoint, body = null) {
+async function cubeQuery(endpoint, body = null, tenantId = null) {
+  const token = generateToken(tenantId);
   const options = {
     method: body ? "POST" : "GET",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
   };
   if (body) options.body = JSON.stringify(body);
   
@@ -32,10 +47,14 @@ const tools = [
   },
   {
     name: "query_analytics",
-    description: "Query analytics data. Use measures like 'Orders.count', 'Orders.totalAmount' and dimensions like 'Orders.productCategory', 'Orders.region'",
+    description: "Query analytics data. Use measures like 'Orders.count', 'Orders.totalAmount' and dimensions like 'Orders.productCategory', 'Orders.region'. Specify tenantId to filter by tenant.",
     inputSchema: {
       type: "object",
       properties: {
+        tenantId: {
+          type: "string",
+          description: "Tenant to query (tenant_A, tenant_B, or tenant_C). Default: tenant_A"
+        },
         measures: {
           type: "array",
           items: { type: "string" },
@@ -98,13 +117,14 @@ async function handleToolCall(name, args) {
     }
 
     case "query_analytics": {
+      const tenantId = args.tenantId || "tenant_A";
       const query = {
         measures: args.measures || [],
         dimensions: args.dimensions || [],
         filters: args.filters || [],
         limit: args.limit || 100
       };
-      const result = await cubeQuery("/cubejs-api/v1/load", { query });
+      const result = await cubeQuery("/cubejs-api/v1/load", { query }, tenantId);
       
       if (result.error) {
         return {
