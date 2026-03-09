@@ -163,11 +163,11 @@ export default function Dashboard({ token, refreshKey }) {
           <div style={styles.statLabel}>Total Pedidos</div>
         </div>
         <div style={styles.stat}>
-          <div style={styles.statValue}>${(stats?.total || 0).toLocaleString()}</div>
+          <div style={styles.statValue}>${Number(stats?.total || 0).toLocaleString()}</div>
           <div style={styles.statLabel}>Ingresos Totales</div>
         </div>
         <div style={styles.stat}>
-          <div style={styles.statValue}>${(stats?.avg || 0).toFixed(0)}</div>
+          <div style={styles.statValue}>${Number(stats?.avg || 0).toFixed(0)}</div>
           <div style={styles.statLabel}>Ticket Medio</div>
         </div>
       </div>
