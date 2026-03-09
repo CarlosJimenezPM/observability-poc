@@ -5,6 +5,7 @@
  * - PostgreSQL (OLTP) - Base de datos operacional
  * - Redpanda (Kafka) - Para streaming a ClickHouse
  * 
+ * ClickHouse consume automáticamente del topic 'orders' via Kafka Engine.
  * En producción, usarías CDC (Debezium) en lugar de escribir a ambos.
  */
 
@@ -12,19 +13,15 @@ const { Kafka } = require('kafkajs');
 const { Pool } = require('pg');
 
 // Configuración
-const INTERVAL = parseInt(process.env.INTERVAL) || 2000; // ms entre pedidos
+const INTERVAL = parseInt(process.env.INTERVAL) || 2000;
 const KAFKA_BROKER = process.env.KAFKA_BROKER || 'localhost:9092';
 const PG_URL = process.env.PG_URL || 'postgres://admin:secret@localhost:5432/operations';
 
 // Datos de prueba
 const TENANTS = ['tenant_A', 'tenant_B', 'tenant_C'];
-const PRODUCTS = [
-  { name: 'Widget Pro', minPrice: 50, maxPrice: 200 },
-  { name: 'Gadget Plus', minPrice: 100, maxPrice: 500 },
-  { name: 'Gizmo Ultra', minPrice: 200, maxPrice: 1000 },
-  { name: 'Device Basic', minPrice: 10, maxPrice: 50 },
-  { name: 'Tool Standard', minPrice: 25, maxPrice: 100 }
-];
+const CATEGORIES = ['Electronics', 'Clothing', 'Food', 'Books', 'Home'];
+const STATUSES = ['pending', 'completed', 'shipped', 'cancelled'];
+const REGIONS = ['North', 'South', 'East', 'West'];
 
 // Clientes
 const kafka = new Kafka({
@@ -43,18 +40,23 @@ function uuid() {
   });
 }
 
+// Elegir elemento aleatorio
+function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 // Generar pedido aleatorio
 function generateOrder() {
-  const tenant = TENANTS[Math.floor(Math.random() * TENANTS.length)];
-  const product = PRODUCTS[Math.floor(Math.random() * PRODUCTS.length)];
-  const amount = Math.floor(Math.random() * (product.maxPrice - product.minPrice)) + product.minPrice;
-  
   return {
-    id: uuid(),
-    tenant_id: tenant,
-    product: product.name,
-    amount: amount,
-    timestamp: new Date().toISOString()
+    order_id: `ORD-${uuid().slice(0, 8)}`,
+    tenant_id: pick(TENANTS),
+    customer_id: `CUST-${Math.floor(Math.random() * 1000)}`,
+    product_category: pick(CATEGORIES),
+    amount: Math.floor(Math.random() * 500) + 10,
+    quantity: Math.floor(Math.random() * 5) + 1,
+    status: pick(STATUSES),
+    region: pick(REGIONS),
+    time: new Date().toISOString()
   };
 }
 
@@ -62,10 +64,14 @@ function generateOrder() {
 async function initPostgres() {
   await pg.query(`
     CREATE TABLE IF NOT EXISTS orders (
-      id VARCHAR(36) PRIMARY KEY,
+      order_id VARCHAR(36) PRIMARY KEY,
       tenant_id VARCHAR(50) NOT NULL,
-      product VARCHAR(100) NOT NULL,
-      amount DECIMAL(10,2) NOT NULL,
+      customer_id VARCHAR(50),
+      product_category VARCHAR(50) NOT NULL,
+      amount DECIMAL(12,2) NOT NULL,
+      quantity INTEGER NOT NULL,
+      status VARCHAR(20) NOT NULL,
+      region VARCHAR(20) NOT NULL,
       created_at TIMESTAMPTZ NOT NULL
     )
   `);
@@ -93,6 +99,7 @@ async function initKafka() {
 // Loop principal
 async function simulate() {
   console.log('🚀 Starting Observability Simulator');
+  console.log(`   Kafka: ${KAFKA_BROKER}`);
   console.log(`   Interval: ${INTERVAL}ms`);
   console.log(`   Tenants: ${TENANTS.join(', ')}`);
   console.log('');
@@ -102,7 +109,7 @@ async function simulate() {
   await producer.connect();
   
   console.log('');
-  console.log('📊 Generating orders...');
+  console.log('📊 Generating orders... (Ctrl+C to stop)');
   console.log('');
   
   let count = 0;
@@ -114,21 +121,23 @@ async function simulate() {
       
       // Escribir en PostgreSQL (OLTP)
       await pg.query(
-        'INSERT INTO orders (id, tenant_id, product, amount, created_at) VALUES ($1, $2, $3, $4, $5)',
-        [order.id, order.tenant_id, order.product, order.amount, order.timestamp]
+        `INSERT INTO orders (order_id, tenant_id, customer_id, product_category, amount, quantity, status, region, created_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [order.order_id, order.tenant_id, order.customer_id, order.product_category, 
+         order.amount, order.quantity, order.status, order.region, order.time]
       );
       
-      // Enviar a Redpanda (streaming a ClickHouse)
+      // Enviar a Redpanda → ClickHouse lo consume automáticamente
       await producer.send({
         topic: 'orders',
         messages: [{
-          key: order.tenant_id,  // Particionado por tenant
+          key: order.tenant_id,
           value: JSON.stringify(order)
         }]
       });
       
       console.log(
-        `[${count}] ${order.tenant_id} | ${order.product.padEnd(15)} | $${order.amount.toString().padStart(4)}`
+        `[${count}] ${order.tenant_id} | ${order.product_category.padEnd(12)} | $${order.amount.toString().padStart(3)} | ${order.status}`
       );
       
     } catch (error) {
@@ -145,5 +154,4 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-// Iniciar
 simulate().catch(console.error);

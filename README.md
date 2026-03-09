@@ -18,23 +18,26 @@ En un SaaS típico, cuando 100 usuarios abren dashboards a las 9AM, la base de d
 ### La solución
 
 ```
-┌─────────────┐     CDC      ┌─────────────┐     Cube.js    ┌─────────────┐
-│ PostgreSQL  │─────────────▶│  Redpanda   │───────────────▶│ ClickHouse  │
-│   (OLTP)    │  streaming   │  (eventos)  │   ingest       │   (OLAP)    │
-│ operaciones │              │             │                │ dashboards  │
-└─────────────┘              └─────────────┘                └──────┬──────┘
-                                                                   │
-                                                            ┌──────▼──────┐
-                                                            │   Cube.js   │
-                                                            │ + tenant_id │
-                                                            │   SIEMPRE   │
-                                                            └─────────────┘
+┌─────────────┐            ┌─────────────┐   Kafka Engine  ┌─────────────┐
+│ PostgreSQL  │            │  Redpanda   │────────────────▶│ ClickHouse  │
+│   (OLTP)    │            │  (eventos)  │   auto-ingest   │   (OLAP)    │
+│ operaciones │            │             │                 │ dashboards  │
+└─────────────┘            └──────▲──────┘                 └──────┬──────┘
+       │                          │                               │
+       │    ┌──────────────┐      │                        ┌──────▼──────┐
+       └───▶│  Simulador   │──────┘                        │   Cube.js   │
+            │ (dual-write) │                               │ + tenant_id │
+            └──────────────┘                               │   SIEMPRE   │
+              En producción:                               └─────────────┘
+              Debezium CDC
 ```
 
 - **PostgreSQL**: Donde ocurren las operaciones (crear pedidos, actualizar estados)
-- **Redpanda**: Captura cambios en tiempo real (CDC) y los transmite
-- **ClickHouse/TimescaleDB**: Almacén optimizado para consultas analíticas masivas
+- **Redpanda**: Message broker que recibe eventos en tiempo real
+- **ClickHouse**: Consume automáticamente de Redpanda via Kafka Engine (no requiere código)
 - **Cube.js**: Capa semántica que inyecta `tenant_id` en TODAS las consultas (seguridad multi-tenant)
+
+> **Nota**: El simulador hace dual-write para simplificar el PoC. En producción usarías **Debezium CDC** para capturar cambios de PostgreSQL automáticamente.
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/CarlosJimenezPM/observavility-poc?quickstart=1)
 
