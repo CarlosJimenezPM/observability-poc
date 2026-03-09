@@ -185,10 +185,19 @@ curl "http://localhost:8123/" -d "SELECT version()"
 curl "http://localhost:8123/" -d "SELECT tenant_id, count() FROM orders GROUP BY tenant_id"
 ```
 
-### Validar multitenancy
+### Validar multitenancy (JWT)
 
 ```bash
+cd demo && npm install && cd ..
 ./demo/test_multitenancy.sh
+```
+
+### Generar tokens JWT
+
+```bash
+cd demo
+node generate-token.js tenant_A    # Token para Tenant A
+node generate-token.js tenant_B    # Token para Tenant B
 ```
 
 ## 📁 Estructura

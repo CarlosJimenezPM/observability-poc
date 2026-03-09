@@ -1,0 +1,14 @@
+{
+  "name": "observability-poc-demo",
+  "version": "1.0.0",
+  "description": "Demo scripts for Observability PoC",
+  "scripts": {
+    "token": "node generate-token.js",
+    "token:a": "node generate-token.js tenant_A",
+    "token:b": "node generate-token.js tenant_B",
+    "token:c": "node generate-token.js tenant_C"
+  },
+  "dependencies": {
+    "jsonwebtoken": "^9.0.0"
+  }
+}
