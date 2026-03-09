@@ -106,6 +106,17 @@ services:
       timescaledb:
         condition: service_healthy
 
+  # MCP Server para integración con IA
+  mcp:
+    build: ./mcp-server
+    ports:
+      - "3001:3001"
+    environment:
+      - CUBE_API_URL=http://cube:4000
+      - MCP_PORT=3001
+    depends_on:
+      - cube
+
   # Frontend demo
   frontend:
     build: ./frontend
