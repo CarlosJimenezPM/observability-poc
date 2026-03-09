@@ -5,14 +5,15 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    host: '0.0.0.0',  // Accesible desde red local
+    host: '0.0.0.0',  // Forzar IPv4
+    strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:4001',
+        target: process.env.API_URL || 'http://localhost:4001',
         changeOrigin: true
       },
       '/cubejs-api': {
-        target: 'http://localhost:4000',
+        target: process.env.CUBE_URL || 'http://cube:4000',
         changeOrigin: true
       }
     }

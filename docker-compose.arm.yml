@@ -106,6 +106,21 @@ services:
       timescaledb:
         condition: service_healthy
 
+  # Frontend demo
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+      - "4001:4001"
+    environment:
+      - KAFKA_BROKER=redpanda:9092
+      - PG_URL=postgres://admin:secret@postgres:5432/operations
+      - VITE_CUBEJS_API_SECRET=${CUBEJS_API_SECRET:-dev-secret-change-in-production}
+    depends_on:
+      - cube
+      - postgres
+      - redpanda
+
 volumes:
   postgres_data:
   timescale_data:
