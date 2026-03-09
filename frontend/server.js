@@ -8,11 +8,12 @@
  * Configuration: Copy .env.example to .env and configure
  */
 
-require('dotenv').config();
+import 'dotenv/config';
+import express from 'express';
+import pgModule from 'pg';
+import { Kafka } from 'kafkajs';
 
-const express = require('express');
-const { Pool } = require('pg');
-const { Kafka } = require('kafkajs');
+const { Pool } = pgModule;
 
 const app = express();
 app.use(express.json());
@@ -97,8 +98,8 @@ app.get('/api/health', (req, res) => {
 
 // Start server
 init().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 API server running on http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 API server running on http://0.0.0.0:${PORT}`);
   });
 }).catch(err => {
   console.error('Failed to initialize:', err);
