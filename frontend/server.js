@@ -1,17 +1,18 @@
 /**
- * Backend API for the Demo Frontend
+ * Backend API for the Demo Frontend (CDC Mode)
  * 
- * Receives orders and writes to:
- * - PostgreSQL (OLTP)
- * - Redpanda (Kafka) → ClickHouse
+ * Receives orders and writes ONLY to PostgreSQL.
+ * Debezium CDC captures changes from the WAL and streams to Redpanda.
+ * ClickHouse consumes from Redpanda automatically.
  * 
- * Configuration: Copy .env.example to .env and configure
+ * Flow: Frontend → API → PostgreSQL → (WAL) → Debezium → Redpanda → ClickHouse
+ * 
+ * This is the CORRECT pattern: no dual-write, guaranteed consistency.
  */
 
 import 'dotenv/config';
 import express from 'express';
 import pgModule from 'pg';
-import { Kafka } from 'kafkajs';
 
 const { Pool } = pgModule;
 
@@ -20,30 +21,21 @@ app.use(express.json());
 
 // Configuration from environment
 const PORT = process.env.PORT || 4001;
-const KAFKA_BROKER = process.env.KAFKA_BROKER || 'localhost:19092';
-const PG_URL = process.env.PG_URL;
+const PG_URL = process.env.PG_URL || 'postgres://admin:secret@localhost:5432/operations';
 
-if (!PG_URL) {
-  console.warn('⚠️  PG_URL not set, using default (dev only)');
-}
-const pgUrl = PG_URL || 'postgres://admin:secret@localhost:5432/operations';
-
-// Kafka producer
-const kafka = new Kafka({
-  clientId: 'demo-frontend',
-  brokers: [KAFKA_BROKER]
-});
-const producer = kafka.producer();
-
-// PostgreSQL pools
-const pg = new Pool({ connectionString: pgUrl });
-const TIMESCALE_URL = process.env.TIMESCALE_URL || 'postgres://admin:secret@timescaledb:5432/analytics';
-const timescale = new Pool({ connectionString: TIMESCALE_URL });
+// PostgreSQL connection
+const pg = new Pool({ connectionString: PG_URL });
 
 // Initialize
 async function init() {
-  await producer.connect();
-  console.log('✅ Connected to Redpanda');
+  // Test connection
+  try {
+    await pg.query('SELECT 1');
+    console.log('✅ Connected to PostgreSQL');
+  } catch (err) {
+    console.error('❌ Failed to connect to PostgreSQL:', err.message);
+    throw err;
+  }
 
   // Create table if not exists
   await pg.query(`
@@ -60,6 +52,11 @@ async function init() {
     )
   `);
   console.log('✅ PostgreSQL table ready');
+  
+  console.log('');
+  console.log('📋 CDC Pipeline:');
+  console.log('   API → PostgreSQL → (WAL) → Debezium → Redpanda → ClickHouse');
+  console.log('');
 }
 
 // Create order endpoint
@@ -67,36 +64,16 @@ app.post('/api/orders', async (req, res) => {
   const order = req.body;
 
   try {
-    // Write to PostgreSQL (OLTP)
+    // Write ONLY to PostgreSQL
+    // Debezium CDC will capture this and stream to Redpanda → ClickHouse
     await pg.query(
       `INSERT INTO orders (order_id, tenant_id, customer_id, product_category, amount, quantity, status, region, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [order.order_id, order.tenant_id, order.customer_id, order.product_category,
-       order.amount, order.quantity, order.status, order.region, order.time]
+       order.amount, order.quantity, order.status, order.region, order.time || new Date().toISOString()]
     );
 
-    // Write to TimescaleDB (OLAP) - for ARM where Kafka Engine isn't available
-    try {
-      await timescale.query(
-        `INSERT INTO orders (time, tenant_id, order_id, customer_id, product_category, amount, quantity, status, region)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [order.time, order.tenant_id, order.order_id, order.customer_id, order.product_category,
-         order.amount, order.quantity, order.status, order.region]
-      );
-    } catch (e) {
-      console.warn('TimescaleDB write skipped:', e.message);
-    }
-
-    // Send to Redpanda (for x86 with ClickHouse Kafka Engine)
-    await producer.send({
-      topic: 'orders',
-      messages: [{
-        key: order.tenant_id,
-        value: JSON.stringify(order)
-      }]
-    });
-
-    console.log(`✓ Order ${order.order_id} created for ${order.tenant_id}`);
+    console.log(`✓ Order ${order.order_id} created for ${order.tenant_id} (CDC will stream to OLAP)`);
     res.json({ success: true, order });
 
   } catch (error) {
@@ -106,8 +83,13 @@ app.post('/api/orders', async (req, res) => {
 });
 
 // Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+app.get('/api/health', async (req, res) => {
+  try {
+    await pg.query('SELECT 1');
+    res.json({ status: 'ok', mode: 'cdc' });
+  } catch (err) {
+    res.status(500).json({ status: 'error', error: err.message });
+  }
 });
 
 // Start server

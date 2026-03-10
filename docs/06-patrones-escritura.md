@@ -185,3 +185,5 @@ CREATE TABLE outbox_events (
 | **Outbox** | Baja | ✅ Para empezar rápido |
 | **CDC (Debezium)** | Media-Alta | ✅ Para producción |
 | **Dual Write** | Baja | ❌ Nunca |
+
+> ✅ **Este PoC implementa CDC correctamente:** El simulador (`simulator/simulator.js`) escribe **SOLO a PostgreSQL**. Debezium captura los cambios del WAL y los envía a Redpanda automáticamente. Ver configuración en `debezium/application.properties`.

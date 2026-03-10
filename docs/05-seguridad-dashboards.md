@@ -162,6 +162,8 @@ Para SaaS Operativo con Dashboards Custom:
 
 **Defensa en profundidad:** Usa ambas capas.
 
+> ⚠️ **Nota sobre este PoC:** La implementación actual **solo usa Cube.js** (primera capa). No hay RLS configurado en ClickHouse. Esto está documentado como una desviación de las mejores prácticas en el [README principal](../README.md#-simplificaciones-del-poc-vs-producción). En producción, activar Row-Level Security en ClickHouse como segunda línea de defensa.
+
 ---
 
 ## Configuración Segura del PoC

@@ -2,7 +2,7 @@
 # Observability PoC - Docker Compose (ARM64)
 # ===========================================
 # For Raspberry Pi, Apple Silicon, etc.
-# Uses TimescaleDB instead of ClickHouse
+# Uses TimescaleDB instead of ClickHouse (ClickHouse has ARM issues)
 # Usage: docker compose -f docker-compose.arm.yml up -d
 # ===========================================
 # ⚠️  SECURITY WARNING:
@@ -10,11 +10,26 @@
 # For production, create a .env file with secure values.
 # See .env.example for required variables.
 # ===========================================
+#
+# Architecture (same as x86, different OLAP DB):
+#   Simulator → PostgreSQL → (WAL) → Debezium → Redpanda → TimescaleDB → Cube.js
+#
+# ===========================================
 
 services:
+  # ===========================================
   # Base de datos operacional (OLTP)
+  # ===========================================
   postgres:
     image: postgres:15-alpine
+    command:
+      - postgres
+      - -c
+      - wal_level=logical           # Enable logical replication for CDC
+      - -c
+      - max_replication_slots=4     # Allow Debezium to create replication slots
+      - -c
+      - max_wal_senders=4           # Allow replication connections
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-operations}
       POSTGRES_USER: ${POSTGRES_USER:-admin}
@@ -23,13 +38,16 @@ services:
       - "5432:5432"  # ⚠️ Production: remove or use internal network only
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d  # CDC setup scripts
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-operations}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
+  # ===========================================
   # Message Broker (Kafka-compatible, ligero)
+  # ===========================================
   redpanda:
     image: redpandadata/redpanda:latest
     command:
@@ -49,7 +67,31 @@ services:
       timeout: 5s
       retries: 5
 
+  # ===========================================
+  # CDC: Change Data Capture (Debezium Server)
+  # ===========================================
+  debezium:
+    image: debezium/server:2.5
+    volumes:
+      - ./debezium:/debezium/conf
+      - debezium_data:/debezium/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/q/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ===========================================
   # Base de datos analítica (OLAP) - TimescaleDB para ARM
+  # ===========================================
+  # Note: Unlike ClickHouse, TimescaleDB doesn't have Kafka Engine.
+  # We use a Kafka consumer worker to write data from Redpanda.
   timescaledb:
     image: timescale/timescaledb:latest-pg15
     environment:
@@ -67,7 +109,9 @@ services:
       timeout: 5s
       retries: 5
 
+  # ===========================================
   # Cache para Cube.js
+  # ===========================================
   redis:
     image: redis:7-alpine
     ports:
@@ -78,7 +122,9 @@ services:
       timeout: 3s
       retries: 5
 
+  # ===========================================
   # Capa semántica - Cube.js conectado a TimescaleDB
+  # ===========================================
   cube:
     image: cubejs/cube:latest
     ports:
@@ -90,13 +136,9 @@ services:
       CUBEJS_DB_NAME: ${TIMESCALE_DB:-analytics}
       CUBEJS_DB_USER: ${TIMESCALE_USER:-admin}
       CUBEJS_DB_PASS: ${TIMESCALE_PASSWORD:-secret}
-      # ⚠️ SECURITY: Generate a secure secret for production
-      # Use: openssl rand -hex 32
       CUBEJS_API_SECRET: ${CUBEJS_API_SECRET:-dev-secret-change-in-production}
-      # ⚠️ SECURITY: Set to "false" in production
       CUBEJS_DEV_MODE: ${CUBEJS_DEV_MODE:-true}
       CUBEJS_SCHEMA_PATH: /cube/conf/model
-      # Cache (cubestore is built-in, redis no longer supported)
       CUBEJS_CACHE_AND_QUEUE_DRIVER: cubestore
     volumes:
       - ./cube:/cube/conf
@@ -106,33 +148,22 @@ services:
       timescaledb:
         condition: service_healthy
 
-  # MCP Server para integración con IA
-  mcp:
-    build: ./mcp-server
-    ports:
-      - "3001:3001"
-    environment:
-      - CUBE_API_URL=http://cube:4000
-      - MCP_PORT=3001
-    depends_on:
-      - cube
-
+  # ===========================================
   # Frontend demo
+  # ===========================================
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
       - "4001:4001"
     environment:
-      - KAFKA_BROKER=redpanda:9092
       - PG_URL=postgres://admin:secret@postgres:5432/operations
-      - TIMESCALE_URL=postgres://admin:secret@timescaledb:5432/analytics
       - VITE_CUBEJS_API_SECRET=${CUBEJS_API_SECRET:-dev-secret-change-in-production}
     depends_on:
       - cube
       - postgres
-      - redpanda
 
 volumes:
   postgres_data:
   timescale_data:
+  debezium_data:

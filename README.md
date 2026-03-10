@@ -18,26 +18,33 @@ En un SaaS típico, cuando 100 usuarios abren dashboards a las 9AM, la base de d
 ### La solución
 
 ```
-┌─────────────┐            ┌─────────────┐   Kafka Engine  ┌─────────────┐
-│ PostgreSQL  │            │  Redpanda   │────────────────▶│ ClickHouse  │
-│   (OLTP)    │            │  (eventos)  │   auto-ingest   │   (OLAP)    │
-│ operaciones │            │             │                 │ dashboards  │
-└─────────────┘            └──────▲──────┘                 └──────┬──────┘
-       │                          │                               │
-       │    ┌──────────────┐      │                        ┌──────▼──────┐
-       └───▶│  Simulador   │──────┘                        │   Cube.js   │
-            │ (dual-write) │                               │ + tenant_id │
-            └──────────────┘                               │   SIEMPRE   │
-              En producción:                               └─────────────┘
-              Debezium CDC
+┌─────────────┐     WAL      ┌─────────────┐              ┌─────────────┐
+│ PostgreSQL  │─────────────▶│  Debezium   │─────────────▶│  Redpanda   │
+│   (OLTP)    │     CDC      │   Server    │    events    │   (Kafka)   │
+│ operaciones │              └─────────────┘              └──────┬──────┘
+└─────────────┘                                                  │
+       ▲                                                   Kafka Engine
+       │                                                         │
+┌──────┴──────┐                                           ┌──────▼──────┐
+│  Simulador  │                                           │ ClickHouse  │
+│  Frontend   │                                           │   (OLAP)    │
+│  (SOLO PG)  │                                           │ dashboards  │
+└─────────────┘                                           └──────┬──────┘
+                                                                 │
+                                                          ┌──────▼──────┐
+                                                          │   Cube.js   │
+                                                          │ + tenant_id │
+                                                          │   SIEMPRE   │
+                                                          └─────────────┘
 ```
 
 - **PostgreSQL**: Donde ocurren las operaciones (crear pedidos, actualizar estados)
-- **Redpanda**: Message broker que recibe eventos en tiempo real
+- **Debezium CDC**: Lee el WAL de PostgreSQL y captura cambios automáticamente
+- **Redpanda**: Message broker que recibe eventos de Debezium
 - **ClickHouse**: Consume automáticamente de Redpanda via Kafka Engine (no requiere código)
 - **Cube.js**: Capa semántica que inyecta `tenant_id` en TODAS las consultas (seguridad multi-tenant)
 
-> **Nota**: El simulador hace dual-write para simplificar el PoC. En producción usarías **Debezium CDC** para capturar cambios de PostgreSQL automáticamente.
+> **Patrón correcto**: El simulador y el frontend escriben **SOLO a PostgreSQL**. Debezium CDC captura los cambios del WAL y los envía a Redpanda automáticamente. **Cero dual-write = consistencia garantizada.**
 
 ## 🚀 Quick Start
 
@@ -69,40 +76,76 @@ make demo         # Test JWT multitenancy
 make clean        # Limpiar todo
 ```
 
-## ⚠️ Seguridad
+## ⚠️ Simplificaciones del PoC vs. Producción
 
-> **IMPORTANTE**: Este proyecto está configurado para **desarrollo local únicamente**. Los valores por defecto NO son seguros para producción.
+> **Este PoC demuestra el patrón arquitectónico correcto (CDC con Debezium).** Las siguientes tablas documentan simplificaciones de seguridad y operaciones que deberías reforzar en producción.
 
-### Antes de desplegar en producción:
+### ✅ Lo que el PoC hace BIEN
 
-1. **Configura variables de entorno seguras**
-   ```bash
-   cp .env.example .env
-   # Edita .env con contraseñas fuertes
-   # Genera el secret de Cube.js: openssl rand -hex 32
-   ```
+| Patrón | Implementación |
+|--------|----------------|
+| **CDC (no dual-write)** | Debezium lee el WAL de PostgreSQL → Redpanda → ClickHouse. El simulador y frontend escriben **SOLO** a PostgreSQL. |
+| **Capa semántica** | Cube.js inyecta `tenant_id` en todas las queries automáticamente |
+| **Separación OLTP/OLAP** | PostgreSQL para operaciones, ClickHouse para dashboards |
+| **Streaming real** | Redpanda (Kafka-compatible) con Kafka Engine en ClickHouse |
 
-2. **Desactiva el modo desarrollo de Cube.js**
-   ```bash
-   CUBEJS_DEV_MODE=false
-   ```
+### 🟠 Desviaciones de Seguridad
 
-3. **Restringe los puertos expuestos**
-   - Solo expón el puerto de la aplicación (4000 para Cube.js)
-   - Bases de datos y Redpanda admin deben ser internos
+| Lo que hace el PoC | Por qué no es ideal | Qué hacer en producción |
+|--------------------|---------------------|-------------------------|
+| **Sin RLS en ClickHouse** — Solo Cube.js filtra por tenant_id | Si alguien accede directo a ClickHouse, ve todos los datos | Activar **Row-Level Security** en ClickHouse como segunda capa de defensa |
 
-4. **Usa JWT firmados para autenticación**
-   - Los tokens Base64 del demo (`test_multitenancy.sh`) son solo para pruebas
-   - En producción, implementa JWT con firma RS256/HS256
+### 🟠 Desviaciones de Seguridad
 
-### Riesgos en la configuración actual (desarrollo):
+| Lo que hace el PoC | Por qué está mal | Qué hacer en producción |
+|--------------------|------------------|-------------------------|
+| **JWT sin verificar firma** — `CUBEJS_DEV_MODE=true` decodifica sin validar | Cualquiera puede forjar un token con el tenant_id que quiera | `CUBEJS_DEV_MODE=false` + verificar firma con secret seguro |
+| **Contraseñas en docker-compose** — `secret`, `admin` visibles en código | Cualquiera que vea el repo tiene acceso | Usar `.env` (en `.gitignore`) con valores generados |
+| **Todos los puertos expuestos** — PostgreSQL:5432, ClickHouse:8123, Redis:6379 | Cualquiera en la red puede conectarse a las DBs | Solo exponer Cube.js (4000), DBs en red interna Docker |
+| **Sin TLS/HTTPS** — Todo va por HTTP sin cifrar | Tokens y datos viajan en texto plano | TLS obligatorio en producción |
+| **Sin autenticación en ClickHouse** — `CLICKHOUSE_PASSWORD` vacío | Acceso sin credenciales | Configurar usuario/contraseña + red restringida |
 
-| Riesgo | Archivo | Mitigación |
-|--------|---------|------------|
-| Contraseñas en texto plano | `docker-compose*.yml` | Usar `.env` (en `.gitignore`) |
-| `CUBEJS_DEV_MODE=true` | `docker-compose*.yml` | Cambiar a `false` en producción |
-| Puertos DB expuestos | `docker-compose*.yml` | Usar red interna Docker |
-| Tokens Base64 sin firma | `demo/*.sh` | Implementar JWT firmados |
+### 🟡 Desviaciones Operacionales
+
+| Lo que hace el PoC | Por qué está mal | Qué hacer en producción |
+|--------------------|------------------|-------------------------|
+| **Sin monitorización** — No hay Prometheus, Grafana, alertas | No sabes si algo falla hasta que un usuario se queja | Observabilidad de la plataforma: métricas, logs, alertas |
+| **Sin healthchecks completos** — Solo básicos en docker-compose | No detectas degradación de servicios | Healthchecks de negocio, circuit breakers |
+| **Sin backups** — Volúmenes Docker sin respaldo | Pierdes todo si falla el disco | Backups automáticos, política de retención |
+| **Sin rate limiting** — Cube.js acepta cualquier cantidad de requests | DoS trivial, costos descontrolados | Rate limiting por tenant, quotas |
+
+### Configuración de Producción
+
+```bash
+# 1. Crear archivo de secretos
+cp .env.example .env
+
+# 2. Generar valores seguros
+echo "CUBEJS_API_SECRET=$(openssl rand -hex 32)" >> .env
+echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)" >> .env
+echo "CLICKHOUSE_PASSWORD=$(openssl rand -base64 24)" >> .env
+
+# 3. Desactivar modo desarrollo
+echo "CUBEJS_DEV_MODE=false" >> .env
+
+# 4. Editar docker-compose para producción:
+#    - Eliminar puertos de DBs (5432, 8123, 6379)
+#    - Usar red interna Docker para comunicación entre servicios
+#    - Añadir proxy inverso (nginx/traefik) con TLS
+```
+
+### Checklist Pre-Producción
+
+- [x] ~~CDC (Debezium) en lugar de dual-write~~ ✅ **Ya implementado**
+- [ ] `.env` con secretos generados, nunca en git
+- [ ] `CUBEJS_DEV_MODE=false`
+- [ ] Puertos de DBs no expuestos
+- [ ] TLS/HTTPS en todos los endpoints públicos
+- [ ] Row-Level Security en ClickHouse
+- [ ] Monitorización y alertas
+- [ ] Backups automatizados
+- [ ] Rate limiting configurado
+- [ ] Tests de seguridad: intentar acceder a datos de otro tenant
 
 ## 📦 Servicios
 
@@ -231,7 +274,7 @@ observability-poc/
 - [05 - Seguridad para Dashboards](docs/05-seguridad-dashboards.md)
 - [10 - Plan de Implementación PoC](docs/10-plan-implementacion-poc.md)
 - [11 - Guía de Demo](docs/11-guia-demo.md) ← *Cómo presentar al equipo*
-- [15 - Compatibilidad Arquitecturas (x86 vs ARM)](docs/15-compatibilidad-arquitecturas.md)
+- [12 - Compatibilidad Arquitecturas (x86 vs ARM)](docs/12-compatibilidad-arquitecturas.md)
 
 [Ver todos los docs →](docs/)
 

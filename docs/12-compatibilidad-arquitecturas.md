@@ -75,14 +75,20 @@ TimescaleDB es una extensión de PostgreSQL para series temporales que:
 
 ## Arquitectura Implementada
 
-### Para x86_64 (Producción / Codespaces)
+### Para x86_64 (Producción / Codespaces) ✅ RECOMENDADO
 
 ```
 docker-compose.yml
 ├── PostgreSQL (OLTP)
-├── ClickHouse (OLAP)  ← Base de datos analítica principal
+├── Debezium CDC        ← Captura cambios del WAL
 ├── Redpanda (Streaming)
+├── ClickHouse (OLAP)   ← Kafka Engine consume automáticamente
 └── Cube.js (Capa semántica)
+```
+
+**Flujo completo CDC:**
+```
+Simulator → PostgreSQL → Debezium → Redpanda → ClickHouse → Cube.js
 ```
 
 ### Para ARM64 (Desarrollo local / Raspberry Pi)
@@ -90,10 +96,13 @@ docker-compose.yml
 ```
 docker-compose.arm.yml
 ├── PostgreSQL (OLTP)
-├── TimescaleDB (OLAP)  ← Alternativa compatible ARM
+├── Debezium CDC
 ├── Redpanda (Streaming)
+├── TimescaleDB (OLAP)  ← Alternativa compatible ARM
 └── Cube.js (Capa semántica)
 ```
+
+> ⚠️ **Limitación ARM**: TimescaleDB no tiene Kafka Engine nativo como ClickHouse. En ARM, el frontend escribe directamente a TimescaleDB además de PostgreSQL. Para CDC completo en ARM, se requeriría un worker adicional que consuma de Redpanda y escriba a TimescaleDB.
 
 ## Configuración de Red: Dual Listener en Redpanda
 

@@ -4,6 +4,8 @@
 
 Construir una PoC funcional que corra en local con Docker Compose, sin gastar en cloud.
 
+> ✅ **Este PoC implementa CDC correctamente con Debezium.** El simulador escribe solo a PostgreSQL, y Debezium captura los cambios del WAL automáticamente. Para consideraciones de seguridad adicionales en producción, consulta [Simplificaciones del PoC vs. Producción](../README.md#-simplificaciones-del-poc-vs-producción).
+
 ---
 
 ## Stack del PoC (Azure → Open Source)

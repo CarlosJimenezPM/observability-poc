@@ -6,11 +6,29 @@
 # For production, create a .env file with secure values.
 # See .env.example for required variables.
 # ===========================================
+#
+# Architecture:
+#   Simulator → PostgreSQL → (WAL) → Debezium → Redpanda → ClickHouse → Cube.js
+#
+# The simulator ONLY writes to PostgreSQL. Debezium captures changes
+# from the WAL and streams them to Redpanda (Kafka). ClickHouse consumes
+# from Redpanda automatically via Kafka Engine.
+# ===========================================
 
 services:
+  # ===========================================
   # Base de datos operacional (OLTP)
+  # ===========================================
   postgres:
     image: postgres:15-alpine
+    command:
+      - postgres
+      - -c
+      - wal_level=logical           # Enable logical replication for CDC
+      - -c
+      - max_replication_slots=4     # Allow Debezium to create replication slots
+      - -c
+      - max_wal_senders=4           # Allow replication connections
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-operations}
       POSTGRES_USER: ${POSTGRES_USER:-admin}
@@ -19,13 +37,16 @@ services:
       - "5432:5432"  # ⚠️ Production: remove or use internal network only
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d  # CDC setup scripts
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-operations}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
+  # ===========================================
   # Message Broker (Kafka-compatible, ligero)
+  # ===========================================
   redpanda:
     image: redpandadata/redpanda:latest
     command:
@@ -45,7 +66,31 @@ services:
       timeout: 5s
       retries: 5
 
+  # ===========================================
+  # CDC: Change Data Capture (Debezium Server)
+  # ===========================================
+  # Reads PostgreSQL WAL and streams changes to Redpanda
+  # This is the "correct" way to sync OLTP → OLAP (no dual-write)
+  debezium:
+    image: debezium/server:2.5
+    volumes:
+      - ./debezium:/debezium/conf        # Configuration
+      - debezium_data:/debezium/data     # Offset storage (tracks progress)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/q/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s  # Give it time to connect to PostgreSQL
+
+  # ===========================================
   # Base de datos analítica (OLAP)
+  # ===========================================
   clickhouse:
     image: clickhouse/clickhouse-server:23.8-alpine
     environment:
@@ -61,7 +106,9 @@ services:
       redpanda:
         condition: service_healthy
 
+  # ===========================================
   # Cache para Cube.js
+  # ===========================================
   redis:
     image: redis:7-alpine
     ports:
@@ -72,7 +119,9 @@ services:
       timeout: 3s
       retries: 5
 
+  # ===========================================
   # Capa semántica
+  # ===========================================
   cube:
     image: cubejs/cube:latest
     ports:
@@ -99,21 +148,22 @@ services:
       clickhouse:
         condition: service_started
 
+  # ===========================================
   # Frontend demo
+  # ===========================================
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
       - "4001:4001"
     environment:
-      - KAFKA_BROKER=redpanda:9092
       - PG_URL=postgres://admin:secret@postgres:5432/operations
       - VITE_CUBEJS_API_SECRET=${CUBEJS_API_SECRET:-dev-secret-change-in-production}
     depends_on:
       - cube
       - postgres
-      - redpanda
 
 volumes:
   postgres_data:
   clickhouse_data:
+  debezium_data:

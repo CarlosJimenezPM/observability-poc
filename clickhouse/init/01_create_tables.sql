@@ -1,6 +1,12 @@
 -- =============================================
 -- ClickHouse: Tablas para Observability PoC
 -- =============================================
+-- 
+-- Data flow:
+--   PostgreSQL → Debezium CDC → Redpanda → ClickHouse
+--   Topic: cdc.public.orders (created by Debezium)
+--
+-- =============================================
 
 -- ============================================
 -- TABLA: orders (destino final OLAP)
@@ -21,47 +27,49 @@ PARTITION BY toYYYYMM(time)
 ORDER BY (tenant_id, time, order_id);
 
 -- ============================================
--- TABLA KAFKA: consume de Redpanda
+-- TABLA KAFKA: consume CDC events from Redpanda
 -- ============================================
--- Esta tabla actúa como "puerta de entrada"
--- Los datos se leen de Kafka y se consumen una vez
+-- Debezium sends data to topic: cdc.public.orders
+-- With ExtractNewRecordState transform, we get flat records
+-- Field names match PostgreSQL column names
 CREATE TABLE IF NOT EXISTS orders_queue (
     order_id String,
     tenant_id String,
     customer_id Nullable(String),
     product_category String,
     amount Float64,
-    quantity UInt32,
+    quantity Int32,
     status String,
     region String,
-    time DateTime64(3)
+    created_at String  -- ISO timestamp from PostgreSQL
 )
 ENGINE = Kafka
 SETTINGS 
     kafka_broker_list = 'redpanda:9092',
-    kafka_topic_list = 'orders',
-    kafka_group_name = 'clickhouse_orders_consumer',
+    kafka_topic_list = 'cdc.public.orders',
+    kafka_group_name = 'clickhouse_cdc_consumer',
     kafka_format = 'JSONEachRow',
     kafka_num_consumers = 1,
-    kafka_max_block_size = 1048576;
+    kafka_max_block_size = 1048576,
+    kafka_skip_broken_messages = 100;
 
 -- ============================================
--- MATERIALIZED VIEW: mueve datos automáticamente
+-- MATERIALIZED VIEW: CDC → orders
 -- ============================================
--- Cada vez que llegan datos a orders_queue,
--- se insertan automáticamente en orders
+-- Transforms CDC records into OLAP format
 CREATE MATERIALIZED VIEW IF NOT EXISTS orders_consumer TO orders AS
 SELECT 
-    time,
+    parseDateTime64BestEffortOrNull(created_at, 3) AS time,
     tenant_id,
     order_id,
     customer_id,
     product_category,
     toDecimal64(amount, 2) AS amount,
-    quantity,
+    toUInt32(quantity) AS quantity,
     status,
     region
-FROM orders_queue;
+FROM orders_queue
+WHERE order_id != '';  -- Skip any malformed records
 
 -- ============================================
 -- TABLA: events (Event sourcing)
@@ -133,4 +141,4 @@ AS SELECT
 FROM metrics
 GROUP BY bucket, tenant_id, metric_name;
 
-SELECT '✅ ClickHouse tables ready - Kafka consumer active on topic: orders' as status;
+SELECT '✅ ClickHouse tables ready - Kafka consumer active on CDC topic: cdc.public.orders' as status;

@@ -40,6 +40,8 @@ cd demo && npm install && \
   ./test_multitenancy.sh                # Validar seguridad
 ```
 
+> ✅ **Este PoC implementa el patrón arquitectónico correcto** (CDC con Debezium, no dual-write). Ver [Simplificaciones del PoC vs. Producción](../README.md#-simplificaciones-del-poc-vs-producción) para consideraciones de seguridad adicionales en producción.
+
 ## Documentación
 
 | Doc | Tema |
