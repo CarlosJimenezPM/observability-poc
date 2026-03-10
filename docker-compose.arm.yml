@@ -149,6 +149,20 @@ services:
         condition: service_healthy
 
   # ===========================================
+  # MCP Server (IA integration)
+  # ===========================================
+  mcp:
+    build: ./mcp-server
+    ports:
+      - "3001:3001"
+    environment:
+      - CUBE_API_URL=http://cube:4000
+      - CUBE_API_SECRET=${CUBEJS_API_SECRET:-dev-secret-change-in-production}
+      - MCP_PORT=3001
+    depends_on:
+      - cube
+
+  # ===========================================
   # Frontend demo
   # ===========================================
   frontend:
