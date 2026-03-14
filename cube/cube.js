@@ -17,29 +17,8 @@ const USE_RLS = process.env.CUBEJS_USE_RLS === 'true';
 module.exports = {
   schemaPath: './model',
 
-  // Custom driver factory to inject tenant_id setting for ClickHouse RLS
-  driverFactory: ({ securityContext }) => {
-    if (!USE_RLS || !securityContext?.tenantId) {
-      // Default connection (no RLS, or no tenant context yet)
-      return {
-        type: 'clickhouse',
-      };
-    }
-
-    // With RLS: Use 'cube' user and pass tenant_id as session setting
-    return {
-      type: 'clickhouse',
-      user: 'cube',
-      password: process.env.CLICKHOUSE_CUBE_PASSWORD || 'cube_secure_password_change_me',
-      // Pass tenant_id as ClickHouse setting
-      queryOptions: {
-        session_id: `cube_${securityContext.tenantId}_${Date.now()}`,
-        settings: {
-          param_tenant_id: securityContext.tenantId,
-        },
-      },
-    };
-  },
+  // Note: ClickHouse RLS with custom driverFactory is only available on x86 (docker-compose.yml)
+  // For ARM (docker-compose.arm.yml), we rely on Cube.js queryRewrite for tenant isolation
 
   // Verify JWT and extract tenant context
   checkAuth: (req, auth) => {
