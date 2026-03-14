@@ -57,39 +57,58 @@ Agente IA → Semantic Layer → DB
 
 El servidor MCP implementa **aislamiento por tenant mediante API keys**. Cada key está vinculada a un tenant específico, eliminando la posibilidad de acceder a datos de otros tenants.
 
-### Configuración de API Keys
+### Almacenamiento de Keys
 
-```json
-// mcp-server/api-keys.json
-{
-  "keys": {
-    "ak_tenant_a_xxxxx": {
-      "tenantId": "tenant_A",
-      "name": "Tenant A - Production",
-      "enabled": true
-    },
-    "ak_tenant_b_xxxxx": {
-      "tenantId": "tenant_B",
-      "name": "Tenant B - Production",
-      "enabled": true
-    }
-  }
-}
+| Fuente | Uso | Características |
+|--------|-----|-----------------|
+| **PostgreSQL** | Producción | Keys hasheadas (SHA256), tracking de uso, expiración, revocación |
+| **JSON fallback** | Desarrollo | Archivo local cuando DB no disponible |
+
+El servidor intenta PostgreSQL primero; si no está disponible, usa el JSON.
+
+### Tabla `api_keys` (PostgreSQL)
+
+```sql
+CREATE TABLE api_keys (
+  id UUID PRIMARY KEY,
+  key_hash VARCHAR(64) NOT NULL UNIQUE,  -- SHA256, nunca texto plano
+  key_prefix VARCHAR(20) NOT NULL,        -- Para identificación en logs
+  tenant_id VARCHAR(50) NOT NULL,
+  name VARCHAR(100),
+  enabled BOOLEAN DEFAULT true,
+  expires_at TIMESTAMPTZ,
+  last_used_at TIMESTAMPTZ,
+  request_count BIGINT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### Gestión de Keys (CLI)
+
+```bash
+cd mcp-server
+
+# Crear nueva key
+node manage-keys.js create tenant_A "Producción - App móvil"
+
+# Listar todas las keys
+node manage-keys.js list
+
+# Revocar key
+node manage-keys.js revoke ak_tenant_a_abc
+
+# Rotar key (revoca antigua, crea nueva)
+node manage-keys.js rotate ak_tenant_a_abc
 ```
 
 ### Cómo funciona
 
 1. **Cliente envía API key** en header `Authorization: Bearer <api_key>`
-2. **MCP Server valida** la key y extrae el `tenantId` asociado
-3. **Todas las queries** se ejecutan con ese tenant_id inyectado
-4. **No existe parámetro `tenantId`** en los tools — es imposible pedir datos de otro tenant
-
-### Generar API Keys seguras
-
-```bash
-openssl rand -hex 20 | sed 's/^/ak_mytenant_/'
-# Ejemplo: ak_mytenant_a3f8c9d1e2b4a6f8c9d1e2b4a6f8c9d1e2b4a6f8
-```
+2. **MCP Server hashea** la key y busca en PostgreSQL (o JSON fallback)
+3. **Valida** que esté enabled y no expirada
+4. **Extrae `tenantId`** y actualiza `last_used_at`, `request_count`
+5. **Todas las queries** se ejecutan con ese tenant_id inyectado
+6. **No existe parámetro `tenantId`** en los tools — es imposible pedir datos de otro tenant
 
 ---
 

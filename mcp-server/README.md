@@ -6,55 +6,79 @@ Servidor MCP que permite a agentes de IA (Claude Desktop, etc.) consultar datos 
 
 Cada API key está vinculada a un `tenant_id`. El servidor valida la key y automáticamente filtra los datos al tenant correspondiente.
 
-### Configurar API Keys
+### Fuentes de API Keys
 
-Edita `api-keys.json`:
+1. **PostgreSQL** (producción) — Keys hasheadas en tabla `api_keys`
+2. **JSON fallback** (desarrollo) — Archivo `api-keys.json` local
 
-```json
-{
-  "keys": {
-    "ak_tenant_a_xxxxx": {
-      "tenantId": "tenant_A",
-      "name": "Tenant A - Production",
-      "enabled": true
-    },
-    "ak_tenant_b_xxxxx": {
-      "tenantId": "tenant_B",
-      "name": "Tenant B - Production",
-      "enabled": true
-    }
-  }
-}
-```
+El servidor intenta PostgreSQL primero; si no está disponible, usa el JSON.
 
-Para generar keys seguras:
-```bash
-openssl rand -hex 20 | sed 's/^/ak_mytenant_/'
-```
+## 🚀 Quick Start
 
-### Pasar la API Key
-
-El servidor acepta la key en:
-1. Header `Authorization: Bearer <api_key>` (recomendado)
-2. Header `X-API-Key: <api_key>`
-3. Query param `?api_key=<api_key>` (para SSE)
-
-## 🚀 Uso
-
-### Levantar el servidor
+### Con el stack completo (PostgreSQL disponible)
 
 ```bash
-# Con el stack completo
+# Levantar infraestructura
 make up
-cd mcp-server && npm start
 
-# O standalone (apuntando a Cube.js externo)
-CUBE_API_URL=http://your-cube:4000 npm start
+# Crear una API key
+cd mcp-server
+npm install
+node manage-keys.js create tenant_A "Mi primera key"
+
+# Copiar la key generada y configurar Claude Desktop
+
+# Iniciar servidor
+npm start
 ```
 
-### Configurar en Claude Desktop
+### Desarrollo local (sin PostgreSQL)
 
-Añade en `claude_desktop_config.json`:
+```bash
+cd mcp-server
+npm install
+
+# Copiar template de keys
+cp api-keys.example.json api-keys.json
+# Editar api-keys.json con tus keys
+
+npm start
+```
+
+## 📋 Gestión de API Keys (CLI)
+
+```bash
+# Crear nueva key
+node manage-keys.js create <tenant_id> [nombre]
+node manage-keys.js create tenant_A "Producción - App móvil"
+
+# Listar todas las keys
+node manage-keys.js list
+
+# Revocar key (por prefijo)
+node manage-keys.js revoke ak_tenant_a_abc
+
+# Rotar key (revoca antigua, crea nueva)
+node manage-keys.js rotate ak_tenant_a_abc
+```
+
+### Ejemplo de salida al crear key
+
+```
+✅ API Key created successfully!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  SAVE THIS KEY - IT WILL NOT BE SHOWN AGAIN!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+API Key: ak_tenant_a_3f8c9d1e2b4a6f8c9d1e2b4a6f8c9d1e2b4a6f8c
+Tenant:  tenant_A
+Name:    Producción - App móvil
+```
+
+## ⚙️ Configuración en Claude Desktop
+
+Añadir en `claude_desktop_config.json`:
 
 ```json
 {
@@ -69,13 +93,13 @@ Añade en `claude_desktop_config.json`:
 }
 ```
 
-> **Importante**: Cada usuario/instalación de Claude Desktop debe tener su propia API key configurada.
+> **Importante**: Cada usuario/instalación debe tener su propia API key.
 
 ## 🛠️ Tools Disponibles
 
 | Tool | Descripción |
 |------|-------------|
-| `whoami` | Muestra el tenant autenticado |
+| `whoami` | Muestra tenant autenticado y fuente de auth |
 | `list_cubes` | Lista cubos analíticos disponibles |
 | `query_analytics` | Consulta métricas (count, revenue, etc.) |
 | `get_cube_schema` | Schema detallado de un cubo |
@@ -83,42 +107,61 @@ Añade en `claude_desktop_config.json`:
 ### Ejemplos de queries
 
 **Total de pedidos y revenue:**
-```
-Measures: ["Orders.count", "Orders.totalAmount"]
+```json
+{ "measures": ["Orders.count", "Orders.totalAmount"] }
 ```
 
 **Pedidos por categoría:**
-```
-Measures: ["Orders.count"]
-Dimensions: ["Orders.productCategory"]
+```json
+{ 
+  "measures": ["Orders.count"],
+  "dimensions": ["Orders.productCategory"]
+}
 ```
 
 **Pedidos completados por región:**
-```
-Measures: ["Orders.count", "Orders.totalAmount"]
-Dimensions: ["Orders.region"]
-Filters: [{"member": "Orders.status", "operator": "equals", "values": ["completed"]}]
-```
-
-**Pedidos por día (últimos 7 días):**
-```
-Measures: ["Orders.count"]
-TimeDimensions: [{"dimension": "Orders.createdAt", "granularity": "day", "dateRange": "last 7 days"}]
+```json
+{
+  "measures": ["Orders.count", "Orders.totalAmount"],
+  "dimensions": ["Orders.region"],
+  "filters": [{"member": "Orders.status", "operator": "equals", "values": ["completed"]}]
+}
 ```
 
 ## 🔒 Seguridad
 
-- **Aislamiento por tenant**: Cada API key solo puede acceder a datos de su tenant
-- **No hay parámetro tenantId**: El tenant se determina por la API key, no por input del usuario
-- **Keys revocables**: Pon `enabled: false` para desactivar una key sin borrarla
+### Base de datos
+
+- Keys hasheadas con SHA256 (nunca en texto plano)
+- Tracking de uso: `last_used_at`, `request_count`
+- Expiración opcional: `expires_at`
+- Revocación instantánea: `enabled = false`
+
+### Tabla `api_keys`
+
+```sql
+CREATE TABLE api_keys (
+  id UUID PRIMARY KEY,
+  key_hash VARCHAR(64) NOT NULL UNIQUE,  -- SHA256
+  key_prefix VARCHAR(20) NOT NULL,        -- Para identificación
+  tenant_id VARCHAR(50) NOT NULL,
+  name VARCHAR(100),
+  enabled BOOLEAN DEFAULT true,
+  expires_at TIMESTAMPTZ,
+  last_used_at TIMESTAMPTZ,
+  request_count BIGINT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
 
 ### Checklist de producción
 
-- [ ] Generar keys únicas y seguras para cada tenant
-- [ ] No commitear `api-keys.json` (añadir a `.gitignore`)
-- [ ] Usar HTTPS en producción
+- [ ] Generar keys únicas con `manage-keys.js create`
+- [ ] No commitear `api-keys.json`
+- [ ] HTTPS en producción
 - [ ] Rotar keys periódicamente
-- [ ] Monitorizar uso por API key
+- [ ] Monitorizar `request_count` por key
+- [ ] Configurar `expires_at` si aplica
 
 ## 📡 Endpoints
 
@@ -127,31 +170,29 @@ TimeDimensions: [{"dimension": "Orders.createdAt", "granularity": "day", "dateRa
 | POST | `/mcp` | Endpoint principal MCP |
 | GET | `/mcp` | SSE streams |
 | DELETE | `/mcp` | Terminar sesión |
-| GET | `/health` | Health check |
+| GET | `/health` | Health check (muestra authSource) |
 | GET | `/` | Info del servidor |
 
 ## 🐛 Debug
 
-Ver logs del servidor:
 ```bash
+# Ver logs del servidor
 npm start 2>&1 | tee mcp.log
-```
 
-Test de autenticación:
-```bash
-# Sin API key (debe fallar)
+# Health check (muestra si usa DB o JSON)
+curl http://localhost:3001/health
+
+# Test sin key (debe dar 401)
 curl -X POST http://localhost:3001/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}'
-
-# Con API key (debe funcionar)
-curl -X POST http://localhost:3001/mcp \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ak_tenant_a_xxxxx" \
-  -d '{"jsonrpc":"2.0","method":"initialize","params":{"capabilities":{}},"id":1}'
 ```
 
-Health check:
-```bash
-curl http://localhost:3001/health
-```
+## 🌐 Variables de Entorno
+
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `MCP_PORT` | 3001 | Puerto del servidor |
+| `CUBE_API_URL` | http://localhost:4000 | URL de Cube.js |
+| `DATABASE_URL` | postgresql://postgres:postgres@localhost:5432/postgres | PostgreSQL |
+| `API_KEYS_FILE` | ./api-keys.json | Fallback JSON |

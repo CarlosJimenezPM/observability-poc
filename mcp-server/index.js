@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * MCP Streamable HTTP Server for Cube.js Analytics
- * With API Key authentication per tenant
+ * With API Key authentication per tenant (PostgreSQL + JSON fallback)
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -9,46 +9,107 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
 import cors from "cors";
-import { randomUUID } from "crypto";
+import { randomUUID, createHash } from "crypto";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import pg from "pg";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CUBE_API_URL = process.env.CUBE_API_URL || "http://localhost:4000";
 const PORT = Number(process.env.MCP_PORT || 3001);
 
-// --- Load API Keys ---
-function loadApiKeys() {
+// PostgreSQL connection
+const DATABASE_URL = process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/postgres";
+let pgPool = null;
+let useDatabase = false;
+
+// --- Initialize PostgreSQL connection ---
+async function initDatabase() {
+  try {
+    pgPool = new pg.Pool({ 
+      connectionString: DATABASE_URL,
+      max: 5,
+      idleTimeoutMillis: 30000,
+    });
+    
+    // Test connection
+    const client = await pgPool.connect();
+    await client.query("SELECT 1");
+    client.release();
+    
+    console.log("✅ Connected to PostgreSQL for API key validation");
+    useDatabase = true;
+  } catch (error) {
+    console.log("⚠️  PostgreSQL not available, using JSON fallback:", error.message);
+    useDatabase = false;
+  }
+}
+
+// --- Load JSON fallback keys ---
+function loadJsonKeys() {
   try {
     const keysPath = process.env.API_KEYS_FILE || join(__dirname, "api-keys.json");
     const data = JSON.parse(readFileSync(keysPath, "utf-8"));
-    console.log(`✅ Loaded ${Object.keys(data.keys).length} API keys`);
+    console.log(`📁 Loaded ${Object.keys(data.keys).length} API keys from JSON fallback`);
     return data.keys;
   } catch (error) {
-    console.error("⚠️  Could not load api-keys.json, using empty key map");
+    console.log("⚠️  Could not load api-keys.json");
     return {};
   }
 }
 
-const API_KEYS = loadApiKeys();
+const JSON_KEYS = loadJsonKeys();
 
-// --- Validate API Key and return tenant info ---
-function validateApiKey(apiKey) {
+// --- Hash API key ---
+function hashApiKey(key) {
+  return createHash("sha256").update(key).digest("hex");
+}
+
+// --- Validate API Key (DB first, then JSON fallback) ---
+async function validateApiKey(apiKey) {
   if (!apiKey) return null;
   
   // Strip "Bearer " prefix if present
-  const key = apiKey.replace(/^Bearer\s+/i, "");
+  const key = apiKey.replace(/^Bearer\s+/i, "").trim();
+  if (!key) return null;
   
-  const keyData = API_KEYS[key];
-  if (!keyData || !keyData.enabled) {
-    return null;
+  // Try database first
+  if (useDatabase && pgPool) {
+    try {
+      const keyHash = hashApiKey(key);
+      const result = await pgPool.query(
+        "SELECT * FROM validate_api_key($1)",
+        [keyHash]
+      );
+      
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
+        console.log(`🔑 [DB] Authenticated: ${row.name} (${row.tenant_id})`);
+        return {
+          tenantId: row.tenant_id,
+          name: row.name,
+          source: "database",
+        };
+      }
+    } catch (error) {
+      console.error("Database validation error:", error.message);
+      // Fall through to JSON
+    }
   }
   
-  return {
-    tenantId: keyData.tenantId,
-    name: keyData.name,
-  };
+  // JSON fallback
+  const keyData = JSON_KEYS[key];
+  if (keyData && keyData.enabled) {
+    console.log(`🔑 [JSON] Authenticated: ${keyData.name} (${keyData.tenantId})`);
+    return {
+      tenantId: keyData.tenantId,
+      name: keyData.name,
+      source: "json",
+    };
+  }
+  
+  return null;
 }
 
 // --- Token generation for Cube.js ---
@@ -131,17 +192,17 @@ async function handleGetCubeSchema(args, tenantId) {
   return { content: [{ type: "text", text: JSON.stringify(schema, null, 2) }] };
 }
 
-async function handleGetMyTenant(tenantId, tenantName) {
+async function handleGetMyTenant(tenantId, tenantName, source) {
   return { 
     content: [{ 
       type: "text", 
-      text: JSON.stringify({ tenantId, name: tenantName }, null, 2) 
+      text: JSON.stringify({ tenantId, name: tenantName, authSource: source }, null, 2) 
     }] 
   };
 }
 
 // --- MCP Server factory (receives tenant context) ---
-function createMcpServer(tenantId, tenantName) {
+function createMcpServer(tenantId, tenantName, authSource) {
   const server = new McpServer({ 
     name: "cube-analytics", 
     version: "1.0.0",
@@ -152,7 +213,7 @@ function createMcpServer(tenantId, tenantName) {
     "whoami",
     "Show current authenticated tenant information",
     {},
-    async () => handleGetMyTenant(tenantId, tenantName)
+    async () => handleGetMyTenant(tenantId, tenantName, authSource)
   );
 
   server.tool(
@@ -251,7 +312,7 @@ app.post("/mcp", async (req, res) => {
       transport = transports[sessionId];
     } else if (!sessionId && isInitializeRequest(req.body)) {
       // New initialization request - validate API key
-      const tenant = validateApiKey(apiKey);
+      const tenant = await validateApiKey(apiKey);
       
       if (!tenant) {
         console.log(`❌ Invalid or missing API key`);
@@ -266,7 +327,7 @@ app.post("/mcp", async (req, res) => {
         return;
       }
       
-      console.log(`✅ Authenticated as: ${tenant.name} (${tenant.tenantId})`);
+      console.log(`✅ Authenticated as: ${tenant.name} (${tenant.tenantId}) via ${tenant.source}`);
       
       // Create new transport
       transport = new StreamableHTTPServerTransport({
@@ -289,7 +350,7 @@ app.post("/mcp", async (req, res) => {
       };
 
       // Connect MCP server with tenant context
-      const server = createMcpServer(tenant.tenantId, tenant.name);
+      const server = createMcpServer(tenant.tenantId, tenant.name, tenant.source);
       await server.connect(transport);
       
       // Handle the request
@@ -362,7 +423,8 @@ app.get("/health", (_req, res) => {
     status: "ok",
     cubeUrl: CUBE_API_URL,
     activeSessions: Object.keys(transports).length,
-    loadedApiKeys: Object.keys(API_KEYS).length,
+    authSource: useDatabase ? "postgresql" : "json",
+    jsonKeysLoaded: Object.keys(JSON_KEYS).length,
   });
 });
 
@@ -373,15 +435,22 @@ app.get("/", (_req, res) => {
     version: "1.0.0",
     endpoint: "/mcp",
     auth: "Required. Use Authorization: Bearer <api_key> header",
+    authSource: useDatabase ? "postgresql" : "json",
   });
 });
 
-// Start server
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🤖 MCP Server listening on http://0.0.0.0:${PORT}/mcp`);
-  console.log(`   Cube.js: ${CUBE_API_URL}`);
-  console.log(`   Auth: API Key required (Authorization header)`);
-});
+// --- Startup ---
+async function start() {
+  await initDatabase();
+  
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🤖 MCP Server listening on http://0.0.0.0:${PORT}/mcp`);
+    console.log(`   Cube.js: ${CUBE_API_URL}`);
+    console.log(`   Auth: ${useDatabase ? "PostgreSQL" : "JSON fallback"}`);
+  });
+}
+
+start();
 
 // Graceful shutdown
 process.on("SIGINT", async () => {
@@ -393,6 +462,9 @@ process.on("SIGINT", async () => {
     } catch (e) {
       console.error(`Error closing session ${sessionId}:`, e);
     }
+  }
+  if (pgPool) {
+    await pgPool.end();
   }
   process.exit(0);
 });
