@@ -17,14 +17,14 @@ The core architecture is complete and working:
 ## Recent Changes
 
 Latest commits:
+- `a5e3a6f` refactor(mcp): modularize server into lib/
 - `4414c49` docs: streamline README, remove redundancy
 - `fb6f6db` docs: add agent-friendly documentation
 - `ebe294b` feat(arm): add CDC consumer for TimescaleDB
 - `c570381` docs: add Architecture Decision Records (ADRs)
-- `f0f2a19` fix(mcp): fix invalid API key test
 
 Pending (not committed):
-- MCP server modularized into `lib/` (auth, tools, cube-client, mcp-factory)
+- None
 
 ## Project Structure
 

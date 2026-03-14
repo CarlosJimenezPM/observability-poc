@@ -1,18 +1,18 @@
 {
   "keys": {
-    "ak_tenant_a_CHANGE_ME": {
+    "ak_tenant_a_6835307c5329e26c5b99b15371b42bf9d41823e8": {
       "tenantId": "tenant_A",
-      "name": "Tenant A - Production",
+      "name": "Tenant A - Test Key",
       "enabled": true
     },
-    "ak_tenant_b_CHANGE_ME": {
+    "ak_tenant_b_test": {
       "tenantId": "tenant_B",
-      "name": "Tenant B - Production",
+      "name": "Tenant B - Test Key",
       "enabled": true
     },
-    "ak_tenant_c_CHANGE_ME": {
+    "ak_tenant_c_test": {
       "tenantId": "tenant_C",
-      "name": "Tenant C - Production",
+      "name": "Tenant C - Test Key",
       "enabled": true
     }
   }
