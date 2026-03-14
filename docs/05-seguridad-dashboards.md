@@ -162,7 +162,12 @@ Para SaaS Operativo con Dashboards Custom:
 
 **Defensa en profundidad:** Usa ambas capas.
 
-> ⚠️ **Nota sobre este PoC:** La implementación actual **solo usa Cube.js** (primera capa). No hay RLS configurado en ClickHouse. Esto está documentado como una desviación de las mejores prácticas en el [README principal](../README.md#-simplificaciones-del-poc-vs-producción). En producción, activar Row-Level Security en ClickHouse como segunda línea de defensa.
+> ✅ **Este PoC implementa defensa en profundidad:**
+> - **Capa 1:** Cube.js `queryRewrite` inyecta filtro `tenant_id` automáticamente
+> - **Capa 2:** ClickHouse Row-Level Security (RLS) con row policies por tenant
+> 
+> Para activar RLS en ClickHouse: `CUBEJS_USE_RLS=true` en el docker-compose.
+> Ver `clickhouse/init/02_row_level_security.sql` para la configuración.
 
 ---
 

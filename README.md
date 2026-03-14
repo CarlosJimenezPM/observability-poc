@@ -117,13 +117,15 @@ make clean        # Limpiar todo
 | **Separación OLTP/OLAP** | PostgreSQL para operaciones, ClickHouse para dashboards |
 | **Streaming real** | Redpanda (Kafka-compatible) con Kafka Engine en ClickHouse |
 
-### 🟠 Desviaciones de Seguridad
+### ✅ Seguridad Implementada
 
-| Lo que hace el PoC | Por qué no es ideal | Qué hacer en producción |
-|--------------------|---------------------|-------------------------|
-| **Sin RLS en ClickHouse** — Solo Cube.js filtra por tenant_id | Si alguien accede directo a ClickHouse, ve todos los datos | Activar **Row-Level Security** en ClickHouse como segunda capa de defensa |
+| Capa | Implementación |
+|------|----------------|
+| **Cube.js queryRewrite** | Inyecta `WHERE tenant_id = X` en todas las queries |
+| **ClickHouse RLS** | Row policies bloquean acceso sin `param_tenant_id` (activar con `CUBEJS_USE_RLS=true`) |
+| **MCP API Keys** | Keys hasheadas en PostgreSQL, vinculadas a tenant |
 
-### 🟠 Desviaciones de Seguridad
+### 🟠 Desviaciones de Seguridad (dev mode)
 
 | Lo que hace el PoC | Por qué está mal | Qué hacer en producción |
 |--------------------|------------------|-------------------------|

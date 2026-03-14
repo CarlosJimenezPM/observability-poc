@@ -133,6 +133,9 @@ services:
       CUBEJS_DB_NAME: default
       CUBEJS_DB_USER: ${CLICKHOUSE_USER:-default}
       CUBEJS_DB_PASS: ${CLICKHOUSE_PASSWORD:-}
+      # Row-Level Security: Set to "true" to use ClickHouse RLS (defense-in-depth)
+      CUBEJS_USE_RLS: ${CUBEJS_USE_RLS:-false}
+      CLICKHOUSE_CUBE_PASSWORD: ${CLICKHOUSE_CUBE_PASSWORD:-cube_secure_password_change_me}
       # ⚠️ SECURITY: Generate a secure secret for production
       # Use: openssl rand -hex 32
       CUBEJS_API_SECRET: ${CUBEJS_API_SECRET:-dev-secret-change-in-production}
