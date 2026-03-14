@@ -33,6 +33,35 @@ async function initDb() {
   }
 }
 
+// --- Decode Debezium DECIMAL values (sent as base64) ---
+function decodeDecimal(value, scale = 2) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && !value.includes("=")) {
+    // Plain string number
+    return parseFloat(value);
+  }
+  
+  try {
+    // Debezium sends DECIMAL as base64-encoded bytes
+    const buffer = Buffer.from(value, "base64");
+    // Convert bytes to BigInt (big-endian)
+    let bigInt = BigInt(0);
+    for (const byte of buffer) {
+      bigInt = (bigInt << BigInt(8)) | BigInt(byte);
+    }
+    // Handle negative numbers (two's complement)
+    if (buffer[0] & 0x80) {
+      bigInt = bigInt - (BigInt(1) << BigInt(buffer.length * 8));
+    }
+    // Apply scale
+    return Number(bigInt) / Math.pow(10, scale);
+  } catch (e) {
+    console.log(`⚠️  Could not decode decimal: ${value}, using 0`);
+    return 0;
+  }
+}
+
 // --- Insert order into TimescaleDB ---
 async function insertOrder(order) {
   // Check if order already exists (TimescaleDB doesn't support simple UNIQUE on non-partition columns)
@@ -55,7 +84,7 @@ async function insertOrder(order) {
     order.order_id,
     order.customer_id,
     order.product_category,
-    order.amount,
+    decodeDecimal(order.amount, 2),
     order.quantity,
     order.status,
     order.region,

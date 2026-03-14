@@ -1,4 +1,4 @@
-.PHONY: help up down logs logs-cdc simulator demo clean build status
+.PHONY: help up down logs logs-cdc simulator demo clean build status test
 
 # Detectar arquitectura (ARM usa docker-compose.arm.yml)
 ARCH := $(shell uname -m)
@@ -23,6 +23,7 @@ help:
 	@echo ""
 	@echo "  make simulator  - Ejecuta el generador de datos"
 	@echo "  make demo       - Ejecuta test de multitenancy JWT"
+	@echo "  make test       - Corre todos los tests"
 	@echo ""
 	@echo "  make clean      - Limpia todo (containers + volumes)"
 	@echo ""
@@ -74,6 +75,20 @@ demo:
 	@echo "🔐 Ejecutando demo JWT..."
 	@cd demo && npm install --silent 2>/dev/null || true
 	cd demo && ./test_multitenancy.sh
+
+# Tests
+test:
+	@echo "🧪 Running tests..."
+	@echo ""
+	@echo "=== MCP Server Tests ==="
+	@cd mcp-server && npm install --silent 2>/dev/null || true
+	cd mcp-server && node test-mcp.js
+	@echo ""
+	@echo "=== Multitenancy Tests ==="
+	@cd demo && npm install --silent 2>/dev/null || true
+	cd demo && ./test_multitenancy.sh
+	@echo ""
+	@echo "✅ All tests complete"
 
 # Limpieza
 clean:
