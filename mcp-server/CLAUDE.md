@@ -4,15 +4,20 @@
 
 MCP (Model Context Protocol) server for AI agent integration. Allows Claude Desktop or other MCP clients to query analytics securely.
 
-## Key Files
+## Structure
 
 ```
 mcp-server/
-├── index.js          # Main server, tool definitions, auth
-├── manage-keys.js    # CLI for API key management
-├── test-mcp.js       # Test suite (run with node)
-├── api-keys.json     # API keys (gitignored in prod)
-└── README.md         # Setup instructions
+├── index.js              # Entry point: Express app, session management
+├── lib/
+│   ├── auth.js           # API key validation (PostgreSQL + JSON fallback)
+│   ├── cube-client.js    # Cube.js API helper
+│   ├── mcp-factory.js    # MCP server factory with tool registration
+│   └── tools.js          # Tool handlers (whoami, query_analytics, etc.)
+├── manage-keys.js        # CLI for API key management
+├── test-mcp.js           # Test suite
+├── api-keys.json         # API keys (gitignored in prod)
+└── README.md             # Setup instructions
 ```
 
 ## Running
@@ -42,34 +47,37 @@ API_KEY=ak_xxx node test-mcp.js  # Test specific key
 - Keys stored in `api-keys.json` (dev) or PostgreSQL (prod)
 - **Tenant derived from key** — AI agent cannot choose tenant
 
-## Available Tools
+## Module Responsibilities
 
-| Tool | Description |
-|------|-------------|
-| `whoami` | Returns authenticated tenant info |
-| `list_cubes` | Lists available Cube.js models |
-| `query_analytics` | Query metrics (orders, revenue, etc.) |
-| `get_cube_schema` | Get schema for a specific cube |
+| Module | Purpose |
+|--------|---------|
+| `index.js` | Express routes, session lifecycle, startup/shutdown |
+| `lib/auth.js` | API key validation, PostgreSQL/JSON fallback |
+| `lib/cube-client.js` | JWT generation, Cube.js API calls |
+| `lib/mcp-factory.js` | MCP server creation, tool registration with Zod schemas |
+| `lib/tools.js` | Business logic for each tool |
 
 ## Adding a Tool
 
-In `index.js`, find the tools array and add:
-
+1. Add handler in `lib/tools.js`:
 ```javascript
-{
-  name: "my_tool",
-  description: "What it does",
-  inputSchema: {
-    type: "object",
-    properties: {
-      param: { type: "string", description: "..." }
-    },
-    required: ["param"]
-  }
+export async function handleMyTool(args, tenantId) {
+  // ... logic
+  return { content: [{ type: "text", text: JSON.stringify(result) }] };
 }
 ```
 
-Then handle it in the `tools/call` switch statement.
+2. Register in `lib/mcp-factory.js`:
+```javascript
+import { handleMyTool } from "./tools.js";
+
+server.tool(
+  "my_tool",
+  "Description",
+  { param: z.string().describe("...") },
+  async (args) => handleMyTool(args, tenantId)
+);
+```
 
 ## Security Notes
 

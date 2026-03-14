@@ -12,15 +12,31 @@ The core architecture is complete and working:
 - [x] ARM64 support (TimescaleDB variant)
 - [x] Row-Level Security in ClickHouse (optional)
 - [x] API key authentication for MCP
+- [x] Agent-friendly documentation (ARCHITECTURE.md, CLAUDE.md)
 
 ## Recent Changes
 
 Latest commits:
+- `4414c49` docs: streamline README, remove redundancy
+- `fb6f6db` docs: add agent-friendly documentation
 - `ebe294b` feat(arm): add CDC consumer for TimescaleDB
 - `c570381` docs: add Architecture Decision Records (ADRs)
 - `f0f2a19` fix(mcp): fix invalid API key test
-- `908f0f1` fix(mcp): use Zod schemas for tool parameters
-- `6b988c1` fix(cube): remove driverFactory for ARM/x86 compat
+
+Pending (not committed):
+- MCP server modularized into `lib/` (auth, tools, cube-client, mcp-factory)
+
+## Project Structure
+
+```
+mcp-server/
+├── index.js          # 192 lines (was 468)
+└── lib/
+    ├── auth.js       # API key validation
+    ├── cube-client.js # Cube.js API helper  
+    ├── mcp-factory.js # MCP server + tool registration
+    └── tools.js      # Tool handlers
+```
 
 ## Known Issues / TODO
 
@@ -38,6 +54,7 @@ Latest commits:
 - [ ] Add more Cube.js models (beyond Orders)
 - [ ] Automated E2E tests
 - [ ] CI/CD pipeline
+- [ ] Cross-tenant isolation test
 
 ## Working On
 
@@ -51,7 +68,7 @@ make up
 
 # Wait ~20s for services, then
 make simulator   # Generate data
-make demo        # Test tenant isolation
+make test        # Run all tests
 
 # Frontend: http://localhost:3000
 # Cube.js Playground: http://localhost:4000
