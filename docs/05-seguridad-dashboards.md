@@ -202,3 +202,48 @@ module.exports = {
   }
 };
 ```
+
+---
+
+## Seguridad del Servidor MCP (Integración IA)
+
+El servidor MCP implementa **autenticación por API Key** para garantizar aislamiento entre tenants cuando agentes de IA consultan datos.
+
+### Cómo funciona
+
+1. Cada API key está vinculada a un `tenant_id` específico
+2. El agente (Claude Desktop, etc.) envía la key en el header `Authorization`
+3. El MCP server valida la key y extrae el tenant automáticamente
+4. **No existe parámetro `tenantId`** en los tools — imposible pedir datos de otro tenant
+
+### Configuración
+
+```json
+// mcp-server/api-keys.json
+{
+  "keys": {
+    "ak_tenant_a_xxxxx": {
+      "tenantId": "tenant_A",
+      "name": "Tenant A - Production",
+      "enabled": true
+    }
+  }
+}
+```
+
+### Generar API Keys seguras
+
+```bash
+openssl rand -hex 20 | sed 's/^/ak_mytenant_/'
+```
+
+### Checklist de Seguridad MCP
+
+- [x] API keys por tenant (no parámetro de usuario)
+- [x] tenant_id extraído de key, no de input
+- [x] Keys desactivables (`enabled: false`)
+- [ ] No commitear `api-keys.json` (añadir a `.gitignore`)
+- [ ] HTTPS en producción
+- [ ] Rotación periódica de keys
+
+Ver detalles completos en [08-integracion-ia-mcp.md](./08-integracion-ia-mcp.md).

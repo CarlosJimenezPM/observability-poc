@@ -33,14 +33,14 @@ Agente IA → Semantic Layer → DB
 ```
 ┌───────────────┐
 │  Agente IA    │  "¿Cómo van las ventas?"
-│ (Gemini/GPT)  │
+│(Claude/GPT/…) │
 └───────┬───────┘
-        │ Protocolo MCP
+        │ Protocolo MCP + API Key
         ▼
 ┌───────────────┐
-│  Servidor MCP │  Expone: get_metric, list_metrics
+│  Servidor MCP │  Valida API Key → extrae tenant_id
 └───────┬───────┘
-        │ REST/GraphQL
+        │ REST
         ▼
 ┌───────────────┐
 │   Cube.js     │  Inyecta tenant_id, cachea en Redis
@@ -53,55 +53,133 @@ Agente IA → Semantic Layer → DB
 
 ---
 
+## 🔐 Autenticación por API Key
+
+El servidor MCP implementa **aislamiento por tenant mediante API keys**. Cada key está vinculada a un tenant específico, eliminando la posibilidad de acceder a datos de otros tenants.
+
+### Configuración de API Keys
+
+```json
+// mcp-server/api-keys.json
+{
+  "keys": {
+    "ak_tenant_a_xxxxx": {
+      "tenantId": "tenant_A",
+      "name": "Tenant A - Production",
+      "enabled": true
+    },
+    "ak_tenant_b_xxxxx": {
+      "tenantId": "tenant_B",
+      "name": "Tenant B - Production",
+      "enabled": true
+    }
+  }
+}
+```
+
+### Cómo funciona
+
+1. **Cliente envía API key** en header `Authorization: Bearer <api_key>`
+2. **MCP Server valida** la key y extrae el `tenantId` asociado
+3. **Todas las queries** se ejecutan con ese tenant_id inyectado
+4. **No existe parámetro `tenantId`** en los tools — es imposible pedir datos de otro tenant
+
+### Generar API Keys seguras
+
+```bash
+openssl rand -hex 20 | sed 's/^/ak_mytenant_/'
+# Ejemplo: ak_mytenant_a3f8c9d1e2b4a6f8c9d1e2b4a6f8c9d1e2b4a6f8
+```
+
+---
+
+## Configuración en Claude Desktop
+
+Añadir en `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "analytics": {
+      "url": "http://localhost:3001/mcp",
+      "headers": {
+        "Authorization": "Bearer ak_tenant_a_xxxxx"
+      }
+    }
+  }
+}
+```
+
+> **Importante**: Cada usuario/instalación de Claude Desktop debe tener su propia API key. No compartir keys entre usuarios.
+
+---
+
 ## Flujo Completo
 
 1. **Usuario pregunta:** "¿Cuántos pedidos retrasados esta semana?"
 
-2. **IA decide llamar herramienta:**
+2. **IA llama herramienta MCP** (con API key en header):
 ```json
 {
-  "tool": "get_metric",
-  "params": { "metric": "late_orders", "time": "this_week" }
+  "tool": "query_analytics",
+  "params": { 
+    "measures": ["Orders.count"],
+    "filters": [{"member": "Orders.status", "operator": "equals", "values": ["pending"]}]
+  }
 }
 ```
 
-3. **Cube.js procesa:**
-   - Extrae tenant_id del JWT
-   - Genera SQL con filtro forzado
+3. **MCP Server:**
+   - Valida API key → extrae `tenant_A`
+   - Pasa query a Cube.js con tenant_id
+
+4. **Cube.js procesa:**
+   - Genera SQL con filtro forzado `WHERE tenant_id = 'tenant_A'`
    - Consulta DB (o caché)
 
-4. **IA responde:** "14 pedidos retrasados, 8% menos que la semana pasada."
+5. **IA responde:** "14 pedidos retrasados, 8% menos que la semana pasada."
 
 ---
 
-## Herramientas MCP a Exponer
+## Herramientas MCP Disponibles
 
-```typescript
-const tools = [
-  {
-    name: "list_available_metrics",
-    description: "Lista métricas disponibles",
-    parameters: {}
-  },
-  {
-    name: "get_metric",
-    description: "Obtiene valor de una métrica",
-    parameters: {
-      metric: { type: "string", required: true },
-      time_range: { type: "string", enum: ["today", "this_week", "this_month"] },
-      group_by: { type: "string", enum: ["day", "region", "product"] }
-    }
-  },
-  {
-    name: "compare_periods",
-    description: "Compara métrica entre dos períodos",
-    parameters: {
-      metric: { type: "string", required: true },
-      period_a: { type: "string", required: true },
-      period_b: { type: "string", required: true }
-    }
-  }
-];
+| Tool | Descripción | Parámetros |
+|------|-------------|------------|
+| `whoami` | Muestra tenant autenticado | — |
+| `list_cubes` | Lista cubos disponibles | — |
+| `query_analytics` | Consulta métricas | measures, dimensions, filters, timeDimensions, limit |
+| `get_cube_schema` | Schema detallado de un cubo | cubeName |
+
+### Ejemplos de uso
+
+**Total pedidos y revenue:**
+```json
+{ "measures": ["Orders.count", "Orders.totalAmount"] }
+```
+
+**Pedidos por categoría:**
+```json
+{ 
+  "measures": ["Orders.count"],
+  "dimensions": ["Orders.productCategory"]
+}
+```
+
+**Pedidos completados por región:**
+```json
+{
+  "measures": ["Orders.count", "Orders.totalAmount"],
+  "dimensions": ["Orders.region"],
+  "filters": [{"member": "Orders.status", "operator": "equals", "values": ["completed"]}]
+}
+```
+
+**Pedidos por día (últimos 7 días):**
+```json
+{
+  "measures": ["Orders.count"],
+  "timeDimensions": [{"dimension": "Orders.createdAt", "granularity": "day", "dateRange": "last 7 days"}]
+}
 ```
 
 ---
@@ -111,10 +189,11 @@ const tools = [
 | Ventaja | Descripción |
 |---------|-------------|
 | **Cero alucinaciones** | IA solo ve métricas expuestas, no tablas |
-| **Seguridad total** | tenant_id inyectado en servidor, imposible saltarlo |
-| **Agnóstico al modelo** | Gemini, GPT, Claude → todos entienden MCP |
+| **Seguridad total** | API key determina tenant, imposible saltarlo |
+| **Agnóstico al modelo** | Claude, GPT, Gemini → todos entienden MCP |
 | **Descubrimiento dinámico** | Nueva métrica en Cube → IA la descubre automáticamente |
 | **Consistencia** | Dashboard y chatbot = mismos números |
+| **Keys revocables** | Desactivar acceso sin tocar código |
 
 ---
 
@@ -126,10 +205,11 @@ const tools = [
 └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘
      │             │             │             │
      │             └──────┬──────┴─────────────┘
-     │                    │
+     │                    │ API Key por tenant
      │                    ▼
      │           ┌─────────────────┐
      │           │   Servidor MCP  │
+     │           │  (valida keys)  │
      │           └────────┬────────┘
      │                    │
      └────────────────────┼─────────────────────
@@ -152,17 +232,43 @@ const tools = [
 | Componente | Tecnología |
 |------------|------------|
 | Servidor MCP | Node.js + `@modelcontextprotocol/sdk` |
+| Autenticación | API Keys (archivo JSON o DB) |
 | Semantic Layer | Cube.js |
 | Caché | Redis |
-| Hosting | Azure App Service |
+| Hosting | Azure App Service / Docker |
 
 ---
 
-## Checklist
+## Seguridad: Checklist
 
-- [ ] Definir métricas en Cube.js
-- [ ] Implementar servidor MCP con tools
-- [ ] Conectar MCP → Cube.js API
-- [ ] Autenticación: extraer tenant_id de JWT
-- [ ] Tests: IA intenta acceder a otro tenant
-- [ ] Documentar tools para equipo
+- [x] API keys por tenant (no parámetro de usuario)
+- [x] tenant_id extraído de key, no de input
+- [x] Keys desactivables (`enabled: false`)
+- [ ] No commitear `api-keys.json` (usar `.gitignore`)
+- [ ] HTTPS en producción
+- [ ] Rotación periódica de keys
+- [ ] Monitorizar uso por API key
+- [ ] Rate limiting por key
+
+---
+
+## Testing de Seguridad
+
+```bash
+# Sin API key → 401
+curl -X POST http://localhost:3001/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}'
+
+# Con API key inválida → 401
+curl -X POST http://localhost:3001/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer invalid_key" \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}'
+
+# Con API key válida → 200
+curl -X POST http://localhost:3001/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ak_tenant_a_xxxxx" \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{"capabilities":{}},"id":1}'
+```

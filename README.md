@@ -250,7 +250,9 @@ observability-poc/
 │   └── model/
 │       └── Orders.yaml     # Schema dimensional
 ├── mcp-server/             # Servidor MCP para integración IA
-│   ├── index.js
+│   ├── index.js            # Servidor con auth por API Key
+│   ├── api-keys.json       # API keys por tenant (no commitear)
+│   ├── api-keys.example.json # Template de API keys
 │   └── package.json
 ├── simulator/
 │   ├── simulator.js        # Generador de datos de prueba
@@ -311,6 +313,60 @@ module.exports = {
   }
 };
 ```
+
+## 🤖 Servidor MCP (Integración IA)
+
+El servidor MCP permite que agentes de IA (Claude Desktop, GPT, etc.) consulten datos analíticos de forma segura.
+
+### Autenticación por API Key
+
+Cada API key está vinculada a un tenant específico. El agente no puede elegir qué tenant consultar — se determina automáticamente por la key.
+
+```json
+// mcp-server/api-keys.json
+{
+  "keys": {
+    "ak_tenant_a_xxxxx": {
+      "tenantId": "tenant_A",
+      "name": "Tenant A - Production",
+      "enabled": true
+    }
+  }
+}
+```
+
+### Configurar Claude Desktop
+
+```json
+// claude_desktop_config.json
+{
+  "mcpServers": {
+    "analytics": {
+      "url": "http://localhost:3001/mcp",
+      "headers": {
+        "Authorization": "Bearer ak_tenant_a_xxxxx"
+      }
+    }
+  }
+}
+```
+
+### Tools disponibles
+
+| Tool | Descripción |
+|------|-------------|
+| `whoami` | Muestra tenant autenticado |
+| `list_cubes` | Lista cubos analíticos |
+| `query_analytics` | Consulta métricas (orders, revenue, etc.) |
+| `get_cube_schema` | Schema de un cubo |
+
+### Generar API Keys
+
+```bash
+openssl rand -hex 20 | sed 's/^/ak_mytenant_/'
+```
+
+Ver documentación completa: [08-integracion-ia-mcp.md](docs/08-integracion-ia-mcp.md)
 
 ## 🛠️ Tecnologías
 

@@ -1,0 +1,19 @@
+{
+  "keys": {
+    "ak_tenant_a_CHANGE_ME": {
+      "tenantId": "tenant_A",
+      "name": "Tenant A - Production",
+      "enabled": true
+    },
+    "ak_tenant_b_CHANGE_ME": {
+      "tenantId": "tenant_B",
+      "name": "Tenant B - Production",
+      "enabled": true
+    },
+    "ak_tenant_c_CHANGE_ME": {
+      "tenantId": "tenant_C",
+      "name": "Tenant C - Production",
+      "enabled": true
+    }
+  }
+}
