@@ -307,6 +307,7 @@ observability-poc/
 - [10 - Plan de Implementación PoC](docs/10-plan-implementacion-poc.md)
 - [11 - Guía de Demo](docs/11-guia-demo.md) ← *Cómo presentar al equipo*
 - [12 - Compatibilidad Arquitecturas (x86 vs ARM)](docs/12-compatibilidad-arquitecturas.md)
+- [13 - Decisiones de Arquitectura (ADRs)](docs/13-decisiones-arquitectura.md) ← *Por qué ClickHouse, por qué MCP, trade-offs*
 
 [Ver todos los docs →](docs/)
 
