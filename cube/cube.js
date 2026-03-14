@@ -43,6 +43,17 @@ module.exports = {
 
   // Verify JWT and extract tenant context
   checkAuth: (req, auth) => {
+    // Dev mode without token: use default tenant (for Playground)
+    if (!auth && DEV_MODE) {
+      console.log('[Auth] Dev mode: No token, using default tenant_A');
+      req.securityContext = {
+        tenantId: 'tenant_A',
+        userId: 'playground',
+        role: 'admin'
+      };
+      return;
+    }
+
     if (!auth) {
       throw new Error('No authorization token provided');
     }
