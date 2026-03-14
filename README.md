@@ -1,47 +1,20 @@
 # 🔭 Observability PoC
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/CarlosJimenezPM/observavility-poc?quickstart=1)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/CarlosJimenezPM/observability-poc?quickstart=1)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Docker](https://img.shields.io/badge/Docker-ready-blue)
 ![MCP](https://img.shields.io/badge/MCP-AI%20Ready-purple)
 
 Arquitectura de referencia para plataformas de observabilidad multi-tenant con separación OLTP/OLAP.
 
-<!-- 
-🎬 DEMO GIF - Instrucciones para grabar:
-
-1. Levantar el stack: make up && make simulator
-2. Abrir http://localhost:3000
-3. Grabar con: 
-   - macOS: Cmd+Shift+5 (grabar pantalla)
-   - Windows: Win+G (Game Bar)
-   - Linux: peek, gifcap, o OBS
-4. Mostrar:
-   - Login como Tenant A
-   - Ver dashboard con datos
-   - Crear un pedido
-   - Ver el pedido aparecer
-   - Logout, login como Tenant B
-   - Ver que NO aparecen los datos de A
-5. Convertir a GIF (si es video):
-   - ffmpeg -i demo.mp4 -vf "fps=10,scale=800:-1" demo.gif
-6. Subir a GitHub y descomentar la línea de abajo
-
-![Demo](docs/assets/demo.gif)
--->
-
 ## 🎯 ¿Qué hace este proyecto?
 
 Este PoC demuestra cómo construir una **plataforma SaaS multi-tenant** que:
 
-1. **Separa operación de analítica** — Las operaciones del día a día (OLTP) no compiten con los dashboards y reportes (OLAP)
-2. **Garantiza aislamiento de datos** — Cada tenant solo ve sus propios datos, imposible acceder a datos de otros clientes
-3. **Escala independientemente** — La carga analítica no afecta el rendimiento operacional
-4. **Está preparada para IA** — Incluye servidor MCP para que agentes de IA consulten datos de forma segura
-
-### El problema que resuelve
-
-En un SaaS típico, cuando 100 usuarios abren dashboards a las 9AM, la base de datos operacional se satura y las operaciones del día a día se ralentizan. Además, si no hay controles estrictos, un bug podría filtrar datos entre clientes.
+1. **Separa operación de analítica** — OLTP no compite con dashboards OLAP
+2. **Garantiza aislamiento de datos** — Cada tenant solo ve sus propios datos
+3. **Escala independientemente** — Carga analítica no afecta operaciones
+4. **Está preparada para IA** — Servidor MCP para que agentes consulten datos
 
 ### La solución
 
@@ -49,8 +22,7 @@ En un SaaS típico, cuando 100 usuarios abren dashboards a las 9AM, la base de d
 ┌─────────────┐     WAL      ┌─────────────┐              ┌─────────────┐
 │ PostgreSQL  │─────────────▶│  Debezium   │─────────────▶│  Redpanda   │
 │   (OLTP)    │     CDC      │   Server    │    events    │   (Kafka)   │
-│ operaciones │              └─────────────┘              └──────┬──────┘
-└─────────────┘                                                  │
+└─────────────┘              └─────────────┘              └──────┬──────┘
        ▲                                                   Kafka Engine
        │                                                         │
 ┌──────┴──────┐                                           ┌──────▼──────┐
@@ -62,311 +34,92 @@ En un SaaS típico, cuando 100 usuarios abren dashboards a las 9AM, la base de d
                                                           ┌──────▼──────┐
                                                           │   Cube.js   │
                                                           │ + tenant_id │
-                                                          │   SIEMPRE   │
                                                           └─────────────┘
 ```
 
-- **PostgreSQL**: Donde ocurren las operaciones (crear pedidos, actualizar estados)
-- **Debezium CDC**: Lee el WAL de PostgreSQL y captura cambios automáticamente
-- **Redpanda**: Message broker que recibe eventos de Debezium
-- **ClickHouse**: Consume automáticamente de Redpanda via Kafka Engine (no requiere código)
-- **Cube.js**: Capa semántica que inyecta `tenant_id` en TODAS las consultas (seguridad multi-tenant)
-
-> **Patrón correcto**: El simulador y el frontend escriben **SOLO a PostgreSQL**. Debezium CDC captura los cambios del WAL y los envía a Redpanda automáticamente. **Cero dual-write = consistencia garantizada.**
+> **Patrón clave**: Writes van SOLO a PostgreSQL. Debezium CDC replica automáticamente a ClickHouse via Redpanda. **Cero dual-write = consistencia garantizada.**
 
 ## 🚀 Quick Start
 
-### Opción 1: GitHub Codespaces (Un click)
+### GitHub Codespaces (un click)
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/CarlosJimenezPM/observavility-poc?quickstart=1)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/CarlosJimenezPM/observability-poc?quickstart=1)
 
-### Opción 2: Local con Make
+### Local
 
 ```bash
-git clone https://github.com/CarlosJimenezPM/observavility-poc.git
-cd observavility-poc
+git clone https://github.com/CarlosJimenezPM/observability-poc.git
+cd observability-poc
 
 make up           # Levanta todo (detecta arquitectura automáticamente)
-make simulator    # Genera datos de prueba (opcional)
+make simulator    # Genera datos de prueba
 ```
 
-Abre http://localhost:3000 para el frontend.
+Frontend: http://localhost:3000 | Cube.js Playground: http://localhost:4000
 
-### Comandos disponibles
+### Comandos
 
 ```bash
 make help         # Ver todos los comandos
-make up           # Levanta infra + frontend
-make down         # Parar todo
-make logs         # Ver logs
-make simulator    # Genera datos de prueba
-make demo         # Test JWT multitenancy
-make clean        # Limpiar todo
+make up           # Levantar stack
+make down         # Parar
+make test         # Correr tests
+make simulator    # Generar datos
+make demo         # Test multitenancy
+make logs-cdc     # Debug CDC pipeline
 ```
 
-## ⚠️ Simplificaciones del PoC vs. Producción
+## 📦 Stack
 
-> **Este PoC demuestra el patrón arquitectónico correcto (CDC con Debezium).** Las siguientes tablas documentan simplificaciones de seguridad y operaciones que deberías reforzar en producción.
-
-### ✅ Lo que el PoC hace BIEN
-
-| Patrón | Implementación |
-|--------|----------------|
-| **CDC (no dual-write)** | Debezium lee el WAL de PostgreSQL → Redpanda → ClickHouse. El simulador y frontend escriben **SOLO** a PostgreSQL. |
-| **Capa semántica** | Cube.js inyecta `tenant_id` en todas las queries automáticamente |
-| **Separación OLTP/OLAP** | PostgreSQL para operaciones, ClickHouse para dashboards |
-| **Streaming real** | Redpanda (Kafka-compatible) con Kafka Engine en ClickHouse |
-
-### ✅ Seguridad Implementada
-
-| Capa | Implementación |
-|------|----------------|
-| **Cube.js queryRewrite** | Inyecta `WHERE tenant_id = X` en todas las queries |
-| **ClickHouse RLS** | Row policies bloquean acceso sin `param_tenant_id` (activar con `CUBEJS_USE_RLS=true`) |
-| **MCP API Keys** | Keys hasheadas en PostgreSQL, vinculadas a tenant |
-
-### 🟠 Desviaciones de Seguridad (dev mode)
-
-| Lo que hace el PoC | Por qué está mal | Qué hacer en producción |
-|--------------------|------------------|-------------------------|
-| **JWT sin verificar firma** — `CUBEJS_DEV_MODE=true` decodifica sin validar | Cualquiera puede forjar un token con el tenant_id que quiera | `CUBEJS_DEV_MODE=false` + verificar firma con secret seguro |
-| **Contraseñas en docker-compose** — `secret`, `admin` visibles en código | Cualquiera que vea el repo tiene acceso | Usar `.env` (en `.gitignore`) con valores generados |
-| **Todos los puertos expuestos** — PostgreSQL:5432, ClickHouse:8123, Redis:6379 | Cualquiera en la red puede conectarse a las DBs | Solo exponer Cube.js (4000), DBs en red interna Docker |
-| **Sin TLS/HTTPS** — Todo va por HTTP sin cifrar | Tokens y datos viajan en texto plano | TLS obligatorio en producción |
-| **Sin autenticación en ClickHouse** — `CLICKHOUSE_PASSWORD` vacío | Acceso sin credenciales | Configurar usuario/contraseña + red restringida |
-
-### 🟡 Desviaciones Operacionales
-
-| Lo que hace el PoC | Por qué está mal | Qué hacer en producción |
-|--------------------|------------------|-------------------------|
-| **Sin monitorización** — No hay Prometheus, Grafana, alertas | No sabes si algo falla hasta que un usuario se queja | Observabilidad de la plataforma: métricas, logs, alertas |
-| **Sin healthchecks completos** — Solo básicos en docker-compose | No detectas degradación de servicios | Healthchecks de negocio, circuit breakers |
-| **Sin backups** — Volúmenes Docker sin respaldo | Pierdes todo si falla el disco | Backups automáticos, política de retención |
-| **Sin rate limiting** — Cube.js acepta cualquier cantidad de requests | DoS trivial, costos descontrolados | Rate limiting por tenant, quotas |
-
-### Configuración de Producción
-
-```bash
-# 1. Crear archivo de secretos
-cp .env.example .env
-
-# 2. Generar valores seguros
-echo "CUBEJS_API_SECRET=$(openssl rand -hex 32)" >> .env
-echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)" >> .env
-echo "CLICKHOUSE_PASSWORD=$(openssl rand -base64 24)" >> .env
-
-# 3. Desactivar modo desarrollo
-echo "CUBEJS_DEV_MODE=false" >> .env
-
-# 4. Editar docker-compose para producción:
-#    - Eliminar puertos de DBs (5432, 8123, 6379)
-#    - Usar red interna Docker para comunicación entre servicios
-#    - Añadir proxy inverso (nginx/traefik) con TLS
-```
-
-### Checklist Pre-Producción
-
-- [x] ~~CDC (Debezium) en lugar de dual-write~~ ✅ **Ya implementado**
-- [ ] `.env` con secretos generados, nunca en git
-- [ ] `CUBEJS_DEV_MODE=false`
-- [ ] Puertos de DBs no expuestos
-- [ ] TLS/HTTPS en todos los endpoints públicos
-- [ ] Row-Level Security en ClickHouse
-- [ ] Monitorización y alertas
-- [ ] Backups automatizados
-- [ ] Rate limiting configurado
-- [ ] Tests de seguridad: intentar acceder a datos de otro tenant
-
-## 📦 Servicios
-
-| Servicio | Puerto | Descripción |
-|----------|--------|-------------|
-| **Cube.js** | 4000 | Capa semántica + Playground |
-| **Redis** | 6379 | Cache para Cube.js |
-| **ClickHouse** | 8123 | Base de datos OLAP (x86_64) |
-| **TimescaleDB** | 5433 | Alternativa OLAP para ARM |
-| **PostgreSQL** | 5432 | Base de datos OLTP |
-| **Redpanda** | 9092 / 19092 | Message broker (Kafka-compatible) |
-
-> **Nota Redpanda**: Puerto `9092` para comunicación interna (entre contenedores Docker), puerto `19092` para acceso externo (desde el host).
-
-## 🏗️ Arquitectura
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         CLIENTES                                │
-│              (Dashboards, APIs, Agentes IA)                     │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    CAPA SEMÁNTICA                               │
-│                      (Cube.js)                                  │
-│  • Modelado dimensional         • Cache inteligente            │
-│  • Control de acceso            • API unificada                │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-┌─────────────────────────┐     ┌─────────────────────────┐
-│        OLTP             │     │         OLAP            │
-│     (PostgreSQL)        │     │ (ClickHouse/TimescaleDB)│
-│                         │     │                         │
-│  • Datos operacionales  │────▶│  • Datos históricos     │
-│  • Transacciones        │     │  • Agregaciones         │
-│  • Baja latencia        │     │  • Alto volumen         │
-└─────────────────────────┘     └─────────────────────────┘
-              │                               │
-              └───────────────┬───────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    MESSAGE BROKER                               │
-│                     (Redpanda)                                  │
-│           CDC / Event Streaming / Ingesta                       │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## 🧪 Demo
-
-### Frontend (Recomendado)
-
-```bash
-make frontend     # http://localhost:3000
-```
-
-- **Login por tenant** — Selecciona Tenant A, B o C
-- **Dashboard** — Gráficos en tiempo real desde Cube.js
-- **Crear pedidos** — Escribe a PostgreSQL → Redpanda → ClickHouse
-
-### Otras formas de probar
-
-```bash
-make simulator              # Genera datos en background
-make demo                   # Test JWT multitenancy (CLI)
-open http://localhost:4000  # Cube.js Playground
-```
-
-### Query directo a ClickHouse
-
-```bash
-curl "http://localhost:8123/" -d "SELECT tenant_id, count() FROM orders GROUP BY tenant_id"
-```
-
-## 📁 Estructura
-
-```
-observability-poc/
-├── .devcontainer/
-│   └── devcontainer.json   # Config GitHub Codespaces
-├── .env.example            # Template de variables de entorno
-├── .gitignore              # Archivos excluidos (incluye .env)
-├── frontend/               # 🆕 Demo UI React
-│   ├── src/
-│   │   ├── App.jsx
-│   │   └── components/
-│   │       ├── Login.jsx
-│   │       ├── Dashboard.jsx
-│   │       └── OrderForm.jsx
-│   ├── server.js           # API backend
-│   └── package.json
-├── clickhouse/
-│   └── init/
-│       └── 01_create_tables.sql
-├── timescaledb/
-│   └── init/
-│       └── 01_create_tables.sql
-├── cube/
-│   ├── cube.js             # Configuración + JWT auth
-│   └── model/
-│       └── Orders.yaml     # Schema dimensional
-├── mcp-server/             # Servidor MCP para integración IA
-│   ├── index.js            # Servidor con auth por API Key
-│   ├── api-keys.json       # API keys por tenant (no commitear)
-│   ├── api-keys.example.json # Template de API keys
-│   └── package.json
-├── simulator/
-│   ├── simulator.js        # Generador de datos de prueba
-│   └── package.json
-├── demo/
-│   ├── test_multitenancy.sh
-│   ├── generate-token.js
-│   └── validate_poc.sh
-├── docs/                   # Documentación técnica
-├── docker-compose.yml      # Stack x86_64 (ClickHouse)
-└── docker-compose.arm.yml  # Stack ARM64 (TimescaleDB)
-```
-
-## 📚 Documentación
-
-- [00 - Resumen Ejecutivo](docs/00-resumen-ejecutivo.md)
-- [01 - Fundamentos de Arquitectura](docs/01-fundamentos-arquitectura.md)
-- [02 - Desafíos Críticos](docs/02-desafios-criticos.md) ← *¿Cuándo usar esta arquitectura?*
-- [03 - Patrón OLTP/OLAP](docs/03-patron-oltp-olap.md)
-- [04 - Arquitectura Multitenant](docs/04-arquitectura-multitenant.md)
-- [05 - Seguridad para Dashboards](docs/05-seguridad-dashboards.md)
-- [10 - Plan de Implementación PoC](docs/10-plan-implementacion-poc.md)
-- [11 - Guía de Demo](docs/11-guia-demo.md) ← *Cómo presentar al equipo*
-- [12 - Compatibilidad Arquitecturas (x86 vs ARM)](docs/12-compatibilidad-arquitecturas.md)
-- [13 - Decisiones de Arquitectura (ADRs)](docs/13-decisiones-arquitectura.md) ← *Por qué ClickHouse, por qué MCP, trade-offs*
-
-[Ver todos los docs →](docs/)
+| Servicio | Puerto | Propósito |
+|----------|--------|-----------|
+| Frontend | 3000 | Demo UI React |
+| Cube.js | 4000 | Capa semántica + Playground |
+| MCP Server | 3001 | Integración IA |
+| PostgreSQL | 5432 | OLTP |
+| ClickHouse | 8123 | OLAP (x86) |
+| TimescaleDB | 5433 | OLAP (ARM) |
+| Redpanda | 9092 | Message broker |
+| Debezium | 8083 | CDC |
 
 ## 🔐 Seguridad Multi-tenant
 
-El aislamiento de datos se implementa en múltiples capas:
+Aislamiento en múltiples capas:
 
-1. **Cube.js**: `queryRewrite` inyecta filtro `tenant_id` automáticamente
-2. **ClickHouse**: Row-level policies (opcional)
-3. **Redpanda**: Topics por tenant o headers de partición
+| Capa | Mecanismo |
+|------|-----------|
+| **Cube.js** | `queryRewrite` inyecta `WHERE tenant_id = X` en todas las queries |
+| **ClickHouse** | Row-Level Security (opcional, `CUBEJS_USE_RLS=true`) |
+| **MCP** | API keys vinculadas a tenant específico |
 
-### Autenticación (Producción)
+## ⚠️ PoC vs Producción
 
-El script `demo/test_multitenancy.sh` usa tokens Base64 simples para demostración. En producción:
+Este PoC demuestra el **patrón arquitectónico correcto**. Para producción, reforzar:
 
-```javascript
-// cube.js - Ejemplo con JWT firmado
-module.exports = {
-  checkAuth: (req, auth) => {
-    // Verificar JWT con tu librería preferida (jsonwebtoken, jose, etc.)
-    const token = jwt.verify(auth, process.env.CUBEJS_API_SECRET);
-    req.securityContext = { tenantId: token.tenantId };
-  },
-  queryRewrite: (query, { securityContext }) => {
-    if (!securityContext.tenantId) {
-      throw new Error('No tenant context');
-    }
-    query.filters.push({
-      member: 'Orders.tenantId',
-      operator: 'equals',
-      values: [securityContext.tenantId]
-    });
-    return query;
-  }
-};
-```
+| PoC (dev mode) | Producción |
+|----------------|------------|
+| JWT sin verificar firma | `CUBEJS_DEV_MODE=false` + secret seguro |
+| Passwords en docker-compose | `.env` con secretos generados |
+| Todos los puertos expuestos | Solo 3000/4000, DBs en red interna |
+| Sin TLS | HTTPS obligatorio |
 
-## 🤖 Servidor MCP (Integración IA)
+<details>
+<summary>Checklist completo de producción</summary>
 
-El servidor MCP permite que agentes de IA (Claude Desktop, GPT, etc.) consulten datos analíticos de forma segura.
+- [ ] `.env` con secretos generados, nunca en git
+- [ ] `CUBEJS_DEV_MODE=false`
+- [ ] Puertos de DBs no expuestos
+- [ ] TLS/HTTPS en todos los endpoints
+- [ ] Row-Level Security en ClickHouse
+- [ ] Monitorización y alertas
+- [ ] Backups automatizados
+- [ ] Rate limiting por tenant
 
-### Autenticación por API Key
+</details>
 
-Cada API key está vinculada a un tenant específico. El agente no puede elegir qué tenant consultar — se determina automáticamente por la key.
+## 🤖 Servidor MCP
 
-```json
-// mcp-server/api-keys.json
-{
-  "keys": {
-    "ak_tenant_a_xxxxx": {
-      "tenantId": "tenant_A",
-      "name": "Tenant A - Production",
-      "enabled": true
-    }
-  }
-}
-```
-
-### Configurar Claude Desktop
+Permite que agentes de IA (Claude Desktop, etc.) consulten analytics de forma segura.
 
 ```json
 // claude_desktop_config.json
@@ -374,38 +127,32 @@ Cada API key está vinculada a un tenant específico. El agente no puede elegir 
   "mcpServers": {
     "analytics": {
       "url": "http://localhost:3001/mcp",
-      "headers": {
-        "Authorization": "Bearer ak_tenant_a_xxxxx"
-      }
+      "headers": { "Authorization": "Bearer ak_tenant_a_xxxxx" }
     }
   }
 }
 ```
 
-### Tools disponibles
+Tools: `whoami`, `list_cubes`, `query_analytics`, `get_cube_schema`
 
-| Tool | Descripción |
-|------|-------------|
-| `whoami` | Muestra tenant autenticado |
-| `list_cubes` | Lista cubos analíticos |
-| `query_analytics` | Consulta métricas (orders, revenue, etc.) |
-| `get_cube_schema` | Schema de un cubo |
+Ver más: [mcp-server/README.md](mcp-server/README.md)
 
-### Generar API Keys
+## 📚 Documentación
 
-```bash
-openssl rand -hex 20 | sed 's/^/ak_mytenant_/'
-```
+| Doc | Descripción |
+|-----|-------------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Estructura técnica del proyecto |
+| [CLAUDE.md](CLAUDE.md) | Guía para agentes/contributors |
+| [docs/](docs/) | Documentación detallada |
 
-Ver documentación completa: [08-integracion-ia-mcp.md](docs/08-integracion-ia-mcp.md)
+Docs destacados:
+- [02 - Desafíos Críticos](docs/02-desafios-criticos.md) — ¿Cuándo usar esta arquitectura?
+- [11 - Guía de Demo](docs/11-guia-demo.md) — Cómo presentar al equipo
+- [13 - ADRs](docs/13-decisiones-arquitectura.md) — Decisiones de arquitectura
 
 ## 🛠️ Tecnologías
 
-- **Cube.js**: Capa semántica y APIs
-- **ClickHouse**: OLAP columnar de alto rendimiento
-- **TimescaleDB**: Alternativa OLAP basada en PostgreSQL
-- **PostgreSQL**: OLTP tradicional
-- **Redpanda**: Streaming Kafka-compatible
+**Cube.js** · **ClickHouse** · **TimescaleDB** · **PostgreSQL** · **Redpanda** · **Debezium** · **React**
 
 ## 📄 Licencia
 
