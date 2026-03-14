@@ -1,6 +1,34 @@
 # 🔭 Observability PoC
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/CarlosJimenezPM/observavility-poc?quickstart=1)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Docker](https://img.shields.io/badge/Docker-ready-blue)
+![MCP](https://img.shields.io/badge/MCP-AI%20Ready-purple)
+
 Arquitectura de referencia para plataformas de observabilidad multi-tenant con separación OLTP/OLAP.
+
+<!-- 
+🎬 DEMO GIF - Instrucciones para grabar:
+
+1. Levantar el stack: make up && make simulator
+2. Abrir http://localhost:3000
+3. Grabar con: 
+   - macOS: Cmd+Shift+5 (grabar pantalla)
+   - Windows: Win+G (Game Bar)
+   - Linux: peek, gifcap, o OBS
+4. Mostrar:
+   - Login como Tenant A
+   - Ver dashboard con datos
+   - Crear un pedido
+   - Ver el pedido aparecer
+   - Logout, login como Tenant B
+   - Ver que NO aparecen los datos de A
+5. Convertir a GIF (si es video):
+   - ffmpeg -i demo.mp4 -vf "fps=10,scale=800:-1" demo.gif
+6. Subir a GitHub y descomentar la línea de abajo
+
+![Demo](docs/assets/demo.gif)
+-->
 
 ## 🎯 ¿Qué hace este proyecto?
 
