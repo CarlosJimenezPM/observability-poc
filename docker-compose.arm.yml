@@ -88,6 +88,26 @@ services:
       start_period: 30s
 
   # ===========================================
+  # CDC Consumer (Redpanda → TimescaleDB)
+  # ===========================================
+  # This is the ARM equivalent of ClickHouse's Kafka Engine
+  cdc-consumer:
+    build: ./cdc-consumer
+    environment:
+      - KAFKA_BROKERS=redpanda:9092
+      - KAFKA_TOPIC=cdc.public.orders
+      - KAFKA_GROUP=timescale-cdc-consumer
+      - PG_URL=postgresql://admin:secret@timescaledb:5432/analytics
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      debezium:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ===========================================
   # Base de datos analítica (OLAP) - TimescaleDB para ARM
   # ===========================================
   # Note: Unlike ClickHouse, TimescaleDB doesn't have Kafka Engine.

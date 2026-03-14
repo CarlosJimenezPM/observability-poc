@@ -1,0 +1,14 @@
+{
+  "name": "cdc-consumer",
+  "version": "1.0.0",
+  "description": "Consume CDC events from Redpanda and insert into TimescaleDB",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "pg": "^8.11.0"
+  }
+}

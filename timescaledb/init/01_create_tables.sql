@@ -59,6 +59,7 @@ SELECT create_hypertable('orders', 'time');
 
 CREATE INDEX idx_orders_tenant ON orders (tenant_id, time DESC);
 CREATE INDEX idx_orders_status ON orders (status, time DESC);
+CREATE INDEX idx_orders_order_id ON orders (order_id);  -- For CDC deduplication
 
 -- ============================================
 -- Continuous Aggregates (Pre-agregaciones)
@@ -95,11 +96,12 @@ GROUP BY bucket, tenant_id, product_category, region;
 -- ============================================
 -- Datos de ejemplo
 -- ============================================
+-- Insert sample data with unique order IDs (INIT- prefix to avoid conflicts with real orders)
 INSERT INTO orders (time, tenant_id, order_id, customer_id, product_category, amount, quantity, status, region)
 SELECT
     NOW() - (random() * interval '30 days'),
-    'tenant_' || (1 + floor(random() * 3)::int),
-    'ORD-' || generate_series,
+    (ARRAY['tenant_A', 'tenant_B', 'tenant_C'])[1 + floor(random() * 3)::int],
+    'INIT-' || to_char(generate_series, 'FM00000'),
     'CUST-' || (1 + floor(random() * 100)::int),
     (ARRAY['Electronics', 'Clothing', 'Food', 'Books', 'Home'])[1 + floor(random() * 5)::int],
     (random() * 500 + 10)::decimal(12,2),
