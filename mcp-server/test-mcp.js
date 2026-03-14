@@ -211,12 +211,12 @@ async function testQueryAnalyticsWithFilters() {
 }
 
 async function testInvalidApiKey() {
-  const savedKey = API_KEY;
   const savedSession = sessionId;
   sessionId = null; // Force new session
   
   const headers = {
     "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
     "Authorization": "Bearer invalid_key_12345",
   };
   
@@ -226,7 +226,7 @@ async function testInvalidApiKey() {
     body: JSON.stringify({
       jsonrpc: "2.0",
       method: "initialize",
-      params: { protocolVersion: "2024-11-05", capabilities: {} },
+      params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1.0" } },
       id: 999,
     }),
   });
