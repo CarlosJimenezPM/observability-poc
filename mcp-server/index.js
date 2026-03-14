@@ -14,6 +14,7 @@ import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
+import { z } from "zod";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CUBE_API_URL = process.env.CUBE_API_URL || "http://localhost:4000";
@@ -159,12 +160,18 @@ async function handleListCubes(tenantId) {
 }
 
 async function handleQueryAnalytics(args, tenantId) {
+  // Debug: log raw args
+  console.log(`🔍 Raw args received:`, JSON.stringify(args));
+  
+  // Args might come nested in different ways depending on SDK version
+  const params = args.arguments || args.params || args;
+  
   const query = {
-    measures: args.measures || [],
-    dimensions: args.dimensions || [],
-    filters: args.filters || [],
-    timeDimensions: args.timeDimensions || [],
-    limit: args.limit || 100,
+    measures: params.measures || [],
+    dimensions: params.dimensions || [],
+    filters: params.filters || [],
+    timeDimensions: params.timeDimensions || [],
+    limit: params.limit || 100,
   };
   
   console.log(`📊 Query for tenant ${tenantId}:`, JSON.stringify(query));
@@ -217,9 +224,9 @@ function createMcpServer(tenantId, tenantName, authSource) {
   );
 
   server.tool(
-    "list_cubes", 
-    "List all available analytics cubes", 
-    {}, 
+    "list_cubes",
+    "List all available analytics cubes",
+    {},
     async () => handleListCubes(tenantId)
   );
 
@@ -227,30 +234,19 @@ function createMcpServer(tenantId, tenantName, authSource) {
     "query_analytics",
     "Query analytics data for your tenant. Returns metrics like order counts, revenue, etc.",
     {
-      measures: { 
-        type: "array", 
-        items: { type: "string" }, 
-        description: "Measures to query: Orders.count, Orders.totalAmount, Orders.avgAmount, Orders.totalQuantity" 
-      },
-      dimensions: { 
-        type: "array", 
-        items: { type: "string" }, 
-        description: "Dimensions to group by: Orders.productCategory, Orders.status, Orders.region, Orders.createdAt" 
-      },
-      filters: {
-        type: "array",
-        items: { type: "object" },
-        description: "Filters array: [{member: 'Orders.status', operator: 'equals', values: ['completed']}]"
-      },
-      timeDimensions: {
-        type: "array",
-        items: { type: "object" },
-        description: "Time dimensions: [{dimension: 'Orders.createdAt', granularity: 'day'}]"
-      },
-      limit: { 
-        type: "number", 
-        description: "Max rows to return (default 100)" 
-      },
+      measures: z.array(z.string()).describe("Measures to query, e.g. ['Orders.count', 'Orders.totalAmount']"),
+      dimensions: z.array(z.string()).optional().describe("Dimensions to group by, e.g. ['Orders.status', 'Orders.region']"),
+      filters: z.array(z.object({
+        member: z.string(),
+        operator: z.string(),
+        values: z.array(z.string())
+      })).optional().describe("Filters array"),
+      timeDimensions: z.array(z.object({
+        dimension: z.string(),
+        granularity: z.string().optional(),
+        dateRange: z.string().optional()
+      })).optional().describe("Time dimensions"),
+      limit: z.number().optional().describe("Max rows to return (default 100)")
     },
     async (args) => handleQueryAnalytics(args, tenantId)
   );
@@ -258,7 +254,9 @@ function createMcpServer(tenantId, tenantName, authSource) {
   server.tool(
     "get_cube_schema",
     "Get detailed schema for a specific cube including all measures and dimensions",
-    { cubeName: { type: "string", description: "Cube name (e.g., Orders)" } },
+    {
+      cubeName: z.string().describe("Cube name, e.g. 'Orders'")
+    },
     async (args) => handleGetCubeSchema(args, tenantId)
   );
 

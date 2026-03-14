@@ -159,8 +159,10 @@ services:
       - CUBE_API_URL=http://cube:4000
       - CUBE_API_SECRET=${CUBEJS_API_SECRET:-dev-secret-change-in-production}
       - MCP_PORT=3001
+      - DATABASE_URL=postgresql://admin:secret@postgres:5432/operations
     depends_on:
       - cube
+      - postgres
 
   # ===========================================
   # Frontend demo
