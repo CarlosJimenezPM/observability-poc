@@ -37,7 +37,31 @@ Este PoC demuestra cómo construir una **plataforma SaaS multi-tenant** que:
                                                           └─────────────┘
 ```
 
-> **Patrón clave**: Writes van SOLO a PostgreSQL. Debezium CDC replica automáticamente a ClickHouse via Redpanda. **Cero dual-write = consistencia garantizada.**
+#### ¿Por qué cada pieza?
+
+| Componente | Qué hace | Por qué esta elección |
+|------------|----------|----------------------|
+| **PostgreSQL** | Base de datos operacional (OLTP). Aquí ocurren las transacciones del día a día: crear pedidos, actualizar estados, etc. | Robusta, conocida, y soporta replicación lógica (WAL) que permite CDC sin impacto en rendimiento. |
+| **Debezium** | Lee el WAL (Write-Ahead Log) de PostgreSQL y emite eventos de cambio. No necesita modificar la aplicación. | Captura cambios a nivel de base de datos, no de aplicación. Si alguien modifica datos por SQL directo, Debezium lo captura igual. |
+| **Redpanda** | Message broker compatible con Kafka. Desacopla la captura de cambios del consumo. | Más ligero que Kafka (no requiere JVM ni ZooKeeper), misma API. Buffer de eventos si ClickHouse está temporalmente caído. |
+| **ClickHouse** | Base de datos columnar para analytics (OLAP). Optimizada para agregaciones sobre millones de filas. | Consultas analíticas 10-100x más rápidas que PostgreSQL. Integración nativa con Kafka (Kafka Engine) sin código adicional. |
+| **Cube.js** | Capa semántica. Traduce peticiones de dashboards a SQL optimizado y aplica seguridad multi-tenant. | Inyecta `WHERE tenant_id = X` en **todas** las queries automáticamente. Imposible olvidar el filtro de seguridad. Además: caché inteligente y API unificada. |
+
+#### El patrón clave: CDC (Change Data Capture)
+
+```
+App escribe a PostgreSQL → WAL captura el cambio → Debezium lo lee → Redpanda lo almacena → ClickHouse lo consume
+```
+
+**¿Por qué no escribir directamente a ambas bases de datos (dual-write)?**
+
+| Dual-write | CDC |
+|------------|-----|
+| Si falla una escritura, los datos quedan inconsistentes | PostgreSQL es la única fuente de verdad |
+| La app necesita conocer ambas DBs | La app solo conoce PostgreSQL |
+| Difícil de mantener y debuggear | Pipeline declarativo y observable |
+
+> **Resultado**: Cero dual-write = consistencia garantizada. Si está en PostgreSQL, llegará a ClickHouse.
 
 ## 🚀 Quick Start
 
