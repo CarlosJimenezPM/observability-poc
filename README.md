@@ -171,6 +171,8 @@ Ver más: [mcp-server/README.md](mcp-server/README.md)
 
 Docs destacados:
 - [02 - Desafíos Críticos](docs/02-desafios-criticos.md) — ¿Cuándo usar esta arquitectura?
+- [07 - Implementación Azure](docs/07-implementacion-azure.md) — Stack tradicional en Azure
+- [14 - Implementación Fabric](docs/14-implementacion-fabric.md) — Stack simplificado con Microsoft Fabric
 - [11 - Guía de Demo](docs/11-guia-demo.md) — Cómo presentar al equipo
 - [13 - ADRs](docs/13-decisiones-arquitectura.md) — Decisiones de arquitectura
 
